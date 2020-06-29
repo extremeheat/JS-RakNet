@@ -1,0 +1,26 @@
+{
+  "name": "jsraknet",
+  "version": "1.0.0",
+  "description": "Basic RakNet implementation written in Javascript",
+  "main": "listener.js",
+  "scripts": {
+    "test": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HerryYT/JSRakNet.git"
+  },
+  "keywords": [
+    "nodejs",
+    "raknet"
+  ],
+  "author": "HerryYT",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/HerryYT/JSRakNet/issues"
+  },
+  "homepage": "https://github.com/HerryYT/JSRakNet#readme",
+  "dependencies": {
+    "jsbinaryutils": "^1.0.2"
+  }
+}
