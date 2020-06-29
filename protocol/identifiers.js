@@ -8,7 +8,8 @@ const Identifiers = {
     OpenConnectionRequest1: 0x05,
     OpenConnectionReply1: 0x06,
     OpenConnectionRequest2: 0x07,
-    OpenConnectionReply2: 0x08
+    OpenConnectionReply2: 0x08,
+    IncompatibleProtocolVersion: 0x19
     
 }
 module.exports = Identifiers

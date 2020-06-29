@@ -3,6 +3,7 @@ const Crypto = require('crypto')
 const EventEmitter  = require('events')
 
 const Connection = require('./connection')
+const InetAddress = require('./utils/inet_address')
 const Identifiers = require('./protocol/identifiers')
 const UnconnectedPing = require('./protocol/unconnected_ping')
 const UnconnectedPong = require('./protocol/unconnected_pong')
@@ -10,6 +11,7 @@ const OpenConnectionRequest1 = require('./protocol/open_connection_request_1')
 const OpenConnectionReply1 = require('./protocol/open_connection_reply_1')
 const OpenConnectionRequest2  = require('./protocol/open_connection_request_2')
 const OpenConnectionReply2 = require('./protocol/open_connection_reply_2')
+const IncompatibleProtocolVersion = require('./protocol/incompatible_protoco_version')
 
 'use strict'
 
@@ -58,6 +60,8 @@ class Listener extends EventEmitter {
     handle(buffer, rinfo) {
         let header = buffer.readUInt8()  // Read packet header to recognize packet type
 
+        // TODO: if has a session
+
         switch(header) {
             case Identifiers.UnconnectedPing:
                 this.handleUnconnectedPing(buffer).then(buffer => {
@@ -70,8 +74,8 @@ class Listener extends EventEmitter {
                 })
             break  
             case Identifiers.OpenConnectionRequest2:
-                this.handleOpenConnectionRequest2(buffer, rinfo).then(buffer => {
-                    console.log(buffer)
+                let address = new InetAddress(rinfo.address, rinfo.port)
+                this.handleOpenConnectionRequest2(buffer, address).then(buffer => {
                     this.#socket.send(buffer, 0, buffer.length, rinfo.port, rinfo.address)
                 })
             break      
@@ -130,6 +134,14 @@ class Listener extends EventEmitter {
             throw new Error('Received an invalid offline message')
         }
 
+        if (decodedPacket.protocol !== PROTOCOL) {
+            packet = new IncompatibleProtocolVersion()
+            packet.protocol = PROTOCOL
+            packet.serverGUID = this.#id
+            packet.write()
+            return packet.buffer
+        }
+
         // Encode response
         packet = new OpenConnectionReply1()
         packet.serverGUID = this.#id
@@ -139,7 +151,7 @@ class Listener extends EventEmitter {
         return packet.buffer
     }
 
-    async handleOpenConnectionRequest2(buffer, rinfo) {
+    async handleOpenConnectionRequest2(buffer, address) {
         let decodedPacket, packet
 
         // Decode server packet
@@ -157,7 +169,7 @@ class Listener extends EventEmitter {
         packet = new OpenConnectionReply2()
         packet.serverGUID = this.#id
         packet.mtuSize = decodedPacket.mtuSize
-        packet.clientAddress = rinfo
+        packet.clientAddress = address
         packet.write()
 
         return packet.buffer

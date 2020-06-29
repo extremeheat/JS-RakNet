@@ -1,4 +1,5 @@
 const BinaryStream = require('jsbinaryutils')
+const InetAddress = require('../utils/inet_address')
 
 'use strict'
 
@@ -42,14 +43,14 @@ class Packet extends BinaryStream {
 			let ipBytes = this.buffer.slice(this.offset, this.addOffset(4, true))
             let addr = `${(-ipBytes[0]-1)&0xff}.${(-ipBytes[1]-1)&0xff}.${(-ipBytes[2]-1)&0xff}.${(-ipBytes[3]-1)&0xff} `
             let port = this.readShort()
-            return {address: addr, port: port, version: ver}
+            return new InetAddress(addr, port, ver)
 		} else {
 			this.offset += 2 // Skip 2 bytes
 			let port = this.readShort()
 			this.offset += 4 // Skip 4 bytes
 			let addr = this.buffer.slice(this.offset, this.offset += 16)
 			this.offset += 4  // Skip 4 bytes
-			return {address: addr, port: port, version: ver}
+			return new InetAddress(addr, port, ver)
 		}
     }
     

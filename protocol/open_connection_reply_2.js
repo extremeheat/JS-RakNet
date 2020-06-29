@@ -1,5 +1,6 @@
 const OfflinePacket = require('./offline_packet')
 const Identifiers = require('./identifiers')
+const InetAddress = require('../utils/inet_address')
 
 'use strict'
 
@@ -11,7 +12,7 @@ class OpenConnectionReply2 extends OfflinePacket {
 
     /** @type {number} */
     #serverGUID
-    /** @type {{address: string, port: number, version: number}} */
+    /** @type {InetAddress} */
     #clientAddress
     /** @type {number} */
     #mtuSize

@@ -1,5 +1,6 @@
 const OfflinePacket = require('./offline_packet')
 const Identifiers = require('./identifiers')
+const InetAddress = require('../utils/inet_address')
 
 'use strict'
 
@@ -9,7 +10,7 @@ class OpenConnectionRequest2 extends OfflinePacket {
         super(Identifiers.OpenConnectionRequest2)
     }
 
-    /** @type {{address: string, port: number, version: number}} */
+    /** @type {InetAddress} */
     #serverAddress
     /** @type {number} */
     #mtuSize
