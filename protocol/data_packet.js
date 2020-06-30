@@ -7,6 +7,10 @@ const BinaryStream = require('jsbinaryutils')
 
 class DataPacket extends Packet {
 
+    constructor() {
+        super(BitFlags.Valid | 0)
+    }
+
     /** @type {EncapsulatedPacket[]} */
     packets = []
 
@@ -23,7 +27,7 @@ class DataPacket extends Packet {
     }
 
     write() {
-        this.writeByte(BitFlags.Valid | 0)
+        super.write()
         this.writeLTriad(this.#sequenceNumber)
         for (let packet of this.packets) {
             this.append(packet instanceof EncapsulatedPacket ? packet.toBinary() : packet.buffer)

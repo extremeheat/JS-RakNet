@@ -260,8 +260,7 @@ class Connection {
     }
 
     receivePacket(packet) {
-        if (packet.reliability !== Reliability.ReliableOrdered ||
-            typeof packet.messageIndex === 'undefined') {
+        if (typeof packet.messageIndex === 'undefined') {
             // Handle the packet directly if it is not a reliable ordered
             // or if it doesn't have a message index    
             this.handlePacket(packet)        
@@ -410,7 +409,6 @@ class Connection {
 
         let id = packet.buffer.readUInt8()
         let dataPacket, pk
-        console.log(id)
         switch (id) {
             case Identifiers.ConnectionRequest:
                 dataPacket = new ConnectionRequest()
@@ -446,7 +444,6 @@ class Connection {
 
     sendPacket(packet) {
         packet.write()
-        console.log(packet, packet.buffer)
         this.#listener.sendBuffer(packet.buffer, this.#address.address, this.#address.port)
     }
     
