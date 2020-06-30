@@ -20,12 +20,12 @@ class Packet extends BinaryStream {
 
     // Decodes packet buffer
     read() {
-
+        this.readByte()  // Skip the packet ID
     }
 
     // Encodes packet buffer
     write() {
-
+        this.writeByte(this.id)
     }
 
     // Writes a string length + buffer 

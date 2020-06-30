@@ -15,7 +15,7 @@ class IncompatibleProtocolVersion extends OfflinePacket {
     #serverGUID
 
     write() {
-        this.writeByte(this.id)
+        super.write()
         this.writeByte(this.#protocol)
         this.writeMagic()
         this.writeLong(this.#serverGUID)

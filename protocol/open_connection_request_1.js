@@ -15,7 +15,7 @@ class OpenConnectionRequest1 extends OfflinePacket {
     #protocol 
 
     read() {
-        this.readByte()  // Skip the packet ID
+        super.read()
         this.#mtuSize = (Buffer.byteLength(this.buffer) + 1) + 28
         this.readMagic()
         this.#protocol = this.readByte()

@@ -15,7 +15,7 @@ class UnconnectedPing extends OfflinePacket {
     #clientGUID
 
     read() {
-        this.readByte()  // Skip the packet ID
+        super.read()
         this.#sendTimestamp = this.readLong()
         this.readMagic()
         this.#clientGUID = this.readLong()

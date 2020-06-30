@@ -12,6 +12,7 @@ const OpenConnectionReply1 = require('./protocol/open_connection_reply_1')
 const OpenConnectionRequest2  = require('./protocol/open_connection_request_2')
 const OpenConnectionReply2 = require('./protocol/open_connection_reply_2')
 const IncompatibleProtocolVersion = require('./protocol/incompatible_protoco_version')
+const BitFlags = require('./protocol/bitflags')
 
 'use strict'
 
@@ -28,8 +29,8 @@ class Listener extends EventEmitter {
     #name
     /** @type {Dgram.Socket} */
     #socket
-    /** @type {Connection[]} */
-    #connections
+    /** @type {Map<string, Connection>} */
+    #connections = new Map()
 
     /**
      * Creates a packet listener on given address and port.
@@ -55,31 +56,38 @@ class Listener extends EventEmitter {
         })
 
         this.#socket.bind(port, address)
+        return this
     }
 
     handle(buffer, rinfo) {
         let header = buffer.readUInt8()  // Read packet header to recognize packet type
 
-        // TODO: if has a session
+        // I have an idea for reconnection, but maybe can be fixed soon
+        // using another method from session itself
 
-        switch(header) {
-            case Identifiers.UnconnectedPing:
-                this.handleUnconnectedPing(buffer).then(buffer => {
-                    this.#socket.send(buffer, 0, buffer.length, rinfo.port, rinfo.address)
-                })
-            break
-            case Identifiers.OpenConnectionRequest1:
-                this.handleOpenConnectionRequest1(buffer).then(buffer => {
-                    this.#socket.send(buffer, 0, buffer.length, rinfo.port, rinfo.address)
-                })
-            break  
-            case Identifiers.OpenConnectionRequest2:
-                let address = new InetAddress(rinfo.address, rinfo.port)
-                this.handleOpenConnectionRequest2(buffer, address).then(buffer => {
-                    this.#socket.send(buffer, 0, buffer.length, rinfo.port, rinfo.address)
-                })
-            break      
-        } 
+        if (this.connections.has(rinfo.address)) {
+            let connection = this.connections.get(rinfo.address)
+            connection.receive(buffer)
+        } else {
+            switch(header) {
+                case Identifiers.UnconnectedPing:
+                    this.handleUnconnectedPing(buffer).then(buffer => {
+                        this.#socket.send(buffer, 0, buffer.length, rinfo.port, rinfo.address)
+                    })
+                break
+                case Identifiers.OpenConnectionRequest1:
+                    this.handleOpenConnectionRequest1(buffer).then(buffer => {
+                        this.#socket.send(buffer, 0, buffer.length, rinfo.port, rinfo.address)
+                    })
+                break  
+                case Identifiers.OpenConnectionRequest2:
+                    let address = new InetAddress(rinfo.address, rinfo.port)
+                    this.handleOpenConnectionRequest2(buffer, address).then(buffer => {
+                        this.#socket.send(buffer, 0, buffer.length, rinfo.port, rinfo.address)
+                    })
+                break      
+            } 
+        }
     }
 
     // async handlers
@@ -171,6 +179,10 @@ class Listener extends EventEmitter {
         packet.mtuSize = decodedPacket.mtuSize
         packet.clientAddress = address
         packet.write()
+
+        // Create a session
+        let conn = new Connection(this, decodedPacket.mtuSize, address)
+        this.#connections.set(address.address, conn)
 
         return packet.buffer
     }

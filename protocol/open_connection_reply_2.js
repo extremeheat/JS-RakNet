@@ -18,7 +18,7 @@ class OpenConnectionReply2 extends OfflinePacket {
     #mtuSize
 
     write() {
-        this.writeByte(this.id)
+        super.write()
         this.writeMagic()
         this.writeLong(this.#serverGUID)
         this.writeAddress(this.#clientAddress)

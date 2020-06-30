@@ -18,7 +18,7 @@ class OpenConnectionRequest2 extends OfflinePacket {
     #clientGUID
 
     read() {
-        this.readByte()  // Skip the packet ID
+        super.read()
         this.readMagic()
         this.#serverAddress = this.readAddress()
         this.#mtuSize = this.readShort()
