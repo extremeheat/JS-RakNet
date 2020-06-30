@@ -41,7 +41,7 @@ class Packet extends BinaryStream {
 		if (ver == 4) {
 			// Read 4 bytes 
 			let ipBytes = this.buffer.slice(this.offset, this.addOffset(4, true))
-            let addr = `${(-ipBytes[0]-1)&0xff}.${(-ipBytes[1]-1)&0xff}.${(-ipBytes[2]-1)&0xff}.${(-ipBytes[3]-1)&0xff} `
+            let addr = `${(-ipBytes[0]-1)&0xff}.${(-ipBytes[1]-1)&0xff}.${(-ipBytes[2]-1)&0xff}.${(-ipBytes[3]-1)&0xff}`
             let port = this.readShort()
             return new InetAddress(addr, port, ver)
 		} else {
@@ -58,8 +58,8 @@ class Packet extends BinaryStream {
     // Needs to get refactored, also needs to be added support for IPv6
     writeAddress(address) {
         this.writeByte(address.version || 4)
-        address.address.split('.', 4).forEach(b => this.writeByte((Number(b)) & 0xff))
-		this.writeShort(address.port)
+        address.address.split('.', 4).forEach(b => this.writeByte(-b-1))
+        this.writeShort(address.port)
     }
 
 }

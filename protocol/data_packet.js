@@ -23,7 +23,7 @@ class DataPacket extends Packet {
     }
 
     write() {
-        this.writeByte(this.id || BitFlags.Valid)
+        this.writeByte(BitFlags.Valid | 0)
         this.writeLTriad(this.#sequenceNumber)
         for (let packet of this.packets) {
             this.append(packet instanceof EncapsulatedPacket ? packet.toBinary() : packet.buffer)

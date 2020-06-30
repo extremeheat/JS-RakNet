@@ -410,7 +410,7 @@ class Connection {
 
         let id = packet.buffer.readUInt8()
         let dataPacket, pk
-        // console.log(packet.buffer)
+        console.log(id)
         switch (id) {
             case Identifiers.ConnectionRequest:
                 dataPacket = new ConnectionRequest()
@@ -440,14 +440,13 @@ class Connection {
             this.sendPacket(this.#sendQueue)
             this.#sendQueue.sendTime = Date.now()  // Not implemented yet
             this.#recoveryQueue.set(this.#sendQueue.sequenceNumber, this.#sendQueue)
-            this.#sendQueue = new DataPacket(0x84)
+            this.#sendQueue = new DataPacket()
         }
     }
 
     sendPacket(packet) {
         packet.write()
-        console.log(packet.buffer)
-        console.log(packet.offset)
+        console.log(packet, packet.buffer)
         this.#listener.sendBuffer(packet.buffer, this.#address.address, this.#address.port)
     }
     
