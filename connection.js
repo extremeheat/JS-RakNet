@@ -6,12 +6,19 @@ const DataPacket = require('./protocol/data_packet')
 const NACK = require('./protocol/nack')
 const ACK = require('./protocol/ack')
 const Reliability = require('./protocol/reliability')
+const Identifiers = require('./protocol/identifiers')
+const ConnectionRequest = require('./protocol/connection_request')
+const ConnectionRequestAccepted = require('./protocol/connection_request_accepted')
+const EncapsulatedPacket = require('./protocol/encapsulated_packet')
 
 'use strict'
 
+const Priority = {
+    Normal: 0,
+    Immediate: 1
+}
 class Connection {
 
-    /** @type {EventEmitter} */
     #listener  
     /** @type {number} */
     #mtuSize
@@ -23,9 +30,10 @@ class Connection {
     // Queue containing sequence numbers to let know the game packets we sent
     #ackQueue = []
     // Need documentation
-    #recoveryQueue = []
+    #recoveryQueue = new Map()
     // Need documentation
     #packetToSend = []
+    #sendQueue = new DataPacket()
 
     // Need documentation
     #windowStart = -1
@@ -39,6 +47,13 @@ class Connection {
     #receivedWindow = []
     // Last received sequence number
     #lastSequenceNumber = -1
+    #sendSequenceNumber = 0
+
+    // #messageIndex = 0
+    // #channelIndex = []
+
+    #needACK = new Map()
+    // #splitID = 0
 
     // Last timestamp of packet received, helpful for timeout
     #lastPacketTime = Date.now()
@@ -47,7 +62,78 @@ class Connection {
         this.#listener = listener
         this.#mtuSize = mtuSize
         this.#address = address
+
+        // for (let i = 0; i < 32; i) {
+        //     this.#channelIndex[i] = 0
+        // }
+
         this.#listener.emit('test')  // it works!!
+    }
+
+    update(timestamp) {
+        // TODO: timeout
+
+        // Send ACKs
+        if (this.#ackQueue.length > 0) {
+            let pk = new ACK()
+            pk.packets = this.#ackQueue
+            this.sendPacket(pk)
+            this.#ackQueue = []
+        }
+
+        if (this.#nackQueue.length > 0) {
+            let pk = new NACK()
+            pk.packets = this.#nackQueue
+            this.sendPacket(pk)
+            this.#nackQueue = []
+        }
+
+        if (this.#packetToSend.length > 0) {
+            let limit = 16
+            for (let pk of this.#packetToSend) {
+                pk.sendTime = timestamp  // To implement
+                pk.write()
+                this.#recoveryQueue.set(pk.sequenceNumber, pk)
+                let index = this.#packetToSend.indexOf(pk)
+                this.#packetToSend.splice(index, 1)
+
+                if (--limit <= 0) {
+                    break
+                }
+            }
+
+            // Packet queue bigger than limit
+            if (this.#packetToSend > 2048) {
+                this.#packetToSend = []
+            }
+        }
+
+        if (this.#needACK.length > 0) {
+            for (let [identifierACK, indexes] of this.#needACK) {
+                if (indexes.length === 0) {
+                    this.#needACK.delete(identifierACK)
+                    // Notify ACK ?!? Maybe i need to send a event with ACK and session
+                }
+            }
+        }
+
+        for (let [seq, pk] of this.#recoveryQueue) {
+            if (pk.sendTime < (Date.now() - 8)) {
+                this.#packetToSend.push(pk)
+                this.#recoveryQueue.delete(seq)
+            }
+        }
+
+        for (let seq of this.#receivedWindow) {
+            if (seq < this.#windowStart) {
+                let index = this.#receivedWindow.indexOf(seq)
+                this.#receivedWindow.splice(index, 1)
+            } else {
+                break
+            }
+        }
+
+        this.sendQueue()
     }
 
     /**
@@ -66,14 +152,14 @@ class Connection {
         } else if (header & BitFlags.Nack) {
             return this.handleNACK(buffer)
         } else {
-            return this.handleDatagram(buffer, header)
+            return this.handleDatagram(buffer)
         }
     }
 
-    handleDatagram(buffer, header) {
+    handleDatagram(buffer) {
         this.#lastPacketTime = Date.now()
 
-        let dataPacket = new DataPacket(header & BitFlags.Valid)
+        let dataPacket = new DataPacket()
         dataPacket.buffer = buffer
         dataPacket.read()
 
@@ -128,7 +214,12 @@ class Connection {
         } 
 
         // Handle encapsulated
-        this.receivePacket(dataPacket)
+        // This is an array but soon 
+        // will be converted to a porperty
+        // because there is alway one packet
+        for (let packet of dataPacket.packets) {
+            this.receivePacket(packet)
+        }
     }
 
     // Handles a ACK packet, this packet confirm that the other 
@@ -138,17 +229,15 @@ class Connection {
         packet.buffer = buffer
         packet.read()
 
-        console.log('ACK')
-        console.log(packet.packets)
-
         for (let seq of packet.packets) {
-            if (this.#recoveryQueue.includes(seq)) {
-                for (let pk of this.#recoveryQueue[seq].packets) {
-                    // Finish handling, remove the packet from ACKs
+            if (this.#recoveryQueue.has(seq)) {
+                for (let pk of this.#recoveryQueue.get(seq).packets) {
+                    if (pk instanceof EncapsulatedPacket && pk.needACK && typeof pk.messageIndex !== 'undefined') {
+                        this.#needACK.delete(pk.identifierACK)
+                    }
                 }
 
-                let index = this.#recoveryQueue.indexOf(seq)
-                this.#recoveryQueue.splice(index, 1)
+                this.#recoveryQueue.delete(seq)
             }
         }
     }
@@ -158,18 +247,14 @@ class Connection {
         packet.buffer = buffer
         packet.read()
 
-        console.log('NACK')
-        console.log(packet.packets)
-
         for (let seq of packet.packets) {
-            if (this.#recoveryQueue.includes(seq)) {
-                let pk = this.#recoveryQueue[seq]
+            if (this.#recoveryQueue.has(seq)) {
+                let pk = this.#recoveryQueue.get(seq)
                 pk.sequenceNumber = this.sequenceNumber++
 
                 this.#packetToSend.push(pk)
 
-                let index = this.#recoveryQueue.indexOf(seq)
-                this.#recoveryQueue.splice(index, 1)
+                this.#recoveryQueue.delete(seq)
             }
         }
     }
@@ -220,6 +305,98 @@ class Connection {
         }
     }
 
+    /* addEncapsulatedToQueue(packet, flags = Priority.Normal) {
+        if ((packet.needACK = (flags & 0b00001000) > 0) === true) {
+            this.#needACK.set(packet.identifierACK, [])
+        }
+
+        if (packet.reliability === 2 ||
+            packet.reliability === 3 ||
+            packet.reliability === 4 ||
+            packet.reliability === 6 ||
+            packet.reliability === 7) 
+        {
+            packet.messageIndex = this.messageIndex++
+
+            if (packet.reliability === 3) {
+                packet.orderIndex = this.#channelIndex[packet.orderChannel]++
+            }
+            
+        }
+
+        let maxSize = mtuSize - 60
+        if (packet.getTotalLength() + 4 > this.#mtuSize) {
+            let splitID = ++this.#splitID % 65536
+            let splitCount = Math.ceil(packet.buffer.length / maxSize)
+            let splitIndex = 0
+            while (!typeof packet.buffer[packet.offset] === 'undefined') {
+                let buffer = packet.buffer.slice(packet.offset, packet.offset = packet.offset + maxSize)
+                let pk = new EncapsulatedPacket()
+                pk.split = true
+                pk.splitID = splitID
+                pk.splitCount = splitCount
+                pk.reliability = packet.reliability
+                pk.splitIndex = splitIndex
+                pk.buffer = buffer
+
+                if (splitIndex > 0) {
+                    pk.messageIndex = this.#messageIndex++
+                } else {
+                    pk.messageIndex = packet.messageIndex  
+                }
+               
+                if (pk.reliability === 3) {
+                    pk.orderChannel = packet.orderChannel
+                    pk.orderIndex = packet.orderIndex
+                }
+
+                this.addToQueue(pk, flags | Priority.Immediate)
+                splitIndex++
+            }
+        } else {
+            this.addToQueue(packet, flags)
+        }
+    } */
+
+    /**
+     * Adds a packet into the queue
+     * 
+     * @param {EncapsulatedPacket} pk 
+     * @param {number} flags 
+     */
+    addToQueue(pk, flags = Priority.Normal) {
+        let priority = flags & 0b0000111
+        if (pk.needACK && typeof pk.messageIndex !== 'undefined') {
+            this.needACK.set(pk.identifierACK, pk.messageIndex)
+        }
+        if (priority === Priority.Immediate) {
+            let packet = new DataPacket()
+            packet.sequenceNumber = this.#sendSequenceNumber++
+            if (pk.needACK) {
+                packet.packets.push(Object.assign({}, pk))
+                pk.needACK = false
+            } else {
+                packet.packets.push(pk.toBinary())
+            }
+            this.sendPacket(packet)
+            packet.sendTime = Date.now()  // Not implemented
+            this.#recoveryQueue.set(packet.sequenceNumber, packet)
+
+            return
+        }
+        let length = this.#sendQueue.length()
+        if (length + pk.getTotalLength() > this.#mtuSize) {
+            this.sendQueue()
+        }
+
+        if (pk.needACK) {
+            this.#sendQueue.packets.push(Object.assign({}, pk))
+            pk.needACK = false
+        } else {
+            this.#sendQueue.packets.push(pk.toBinary())
+        }
+    }
+
     /**
      * Encapsulated handling route
      * 
@@ -231,8 +408,47 @@ class Connection {
             return
         }
 
-        let id = packet.content.readUInt8()
-        console.log(id)
+        let id = packet.buffer.readUInt8()
+        let dataPacket, pk
+        // console.log(packet.buffer)
+        switch (id) {
+            case Identifiers.ConnectionRequest:
+                dataPacket = new ConnectionRequest()
+                dataPacket.buffer = packet.buffer
+                dataPacket.read()
+
+                pk = new ConnectionRequestAccepted()
+                pk.clientAddress = this.#address
+                pk.requestTimestamp = dataPacket.requestTimestamp
+                pk.accpetedTimestamp = BigInt(Date.now())
+                pk.write()
+
+                let sendPacket = new EncapsulatedPacket()
+                sendPacket.reliability = 0
+                sendPacket.buffer = pk.buffer
+                this.addToQueue(sendPacket, Priority.Immediate)
+            break   
+            case Identifiers.NewIncomingConnection:
+                console.log('NEW INCOMING')
+                break 
+        }
+    }
+
+    sendQueue() {
+        if (this.#sendQueue.packets.length > 0) {
+            this.#sendQueue.sequenceNumber = this.#sendSequenceNumber++
+            this.sendPacket(this.#sendQueue)
+            this.#sendQueue.sendTime = Date.now()  // Not implemented yet
+            this.#recoveryQueue.set(this.#sendQueue.sequenceNumber, this.#sendQueue)
+            this.#sendQueue = new DataPacket(0x84)
+        }
+    }
+
+    sendPacket(packet) {
+        packet.write()
+        console.log(packet.buffer)
+        console.log(packet.offset)
+        this.#listener.sendBuffer(packet.buffer, this.#address.address, this.#address.port)
     }
     
 }

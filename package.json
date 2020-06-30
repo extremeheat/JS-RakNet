@@ -21,6 +21,6 @@
   },
   "homepage": "https://github.com/HerryYT/JSRakNet#readme",
   "dependencies": {
-    "jsbinaryutils": "^1.0.2"
+    "jsbinaryutils": "^1.0.5"
   }
 }

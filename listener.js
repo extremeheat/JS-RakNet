@@ -20,6 +20,10 @@ const BitFlags = require('./protocol/bitflags')
 const DUMMY_MOTD = 'MCPE;JSRakNet;407;1.16.0;0;5;server_id;JSRakNet;Creative;1;19132;19132;'
 const PROTOCOL = 10  // Minecraft related protocol 
 
+// Raknet ticks
+const RAKNET_TPS = 100
+const RAKNET_TICK_LENGTH = 1 / RAKNET_TPS
+
 // Listen to packets and then process them
 class Listener extends EventEmitter {
 
@@ -31,6 +35,8 @@ class Listener extends EventEmitter {
     #socket
     /** @type {Map<string, Connection>} */
     #connections = new Map()
+    /** @type {boolean} */
+    #shutdown = false 
 
     /**
      * Creates a packet listener on given address and port.
@@ -56,6 +62,7 @@ class Listener extends EventEmitter {
         })
 
         this.#socket.bind(port, address)
+        this.tick()  // tick sessions
         return this
     }
 
@@ -185,6 +192,29 @@ class Listener extends EventEmitter {
         this.#connections.set(address.address, conn)
 
         return packet.buffer
+    }
+
+    tick() {
+        let int = setInterval(() => {
+            if (!this.#shutdown) {
+                for (let [_, connection]of this.#connections) {
+                    connection.update(Date.now())
+                }
+            } else {
+                clearInterval(int)
+            }
+        }, RAKNET_TICK_LENGTH * 1000)
+    }
+
+    /**
+     * Send packet buffer to the client.
+     * 
+     * @param {Buffer} buffer 
+     * @param {string} address 
+     * @param {number} port 
+     */
+    sendBuffer(buffer, address, port) {
+        this.#socket.send(buffer, 0, buffer.length, port, address)
     }
 
     get socket() {

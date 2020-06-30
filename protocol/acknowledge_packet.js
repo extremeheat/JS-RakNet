@@ -8,13 +8,13 @@ class AcknowledgePacket extends Packet {
 
     // Array containing all sequence numbers of received (ACK)
     // or lost (NACK) packets
-    #packets = []
+    packets = []
 
     read() {
         super.read()
 
         // Clear old cached decoded packets 
-        this.#packets = []
+        this.packets = []
         let recordCount = this.readShort()
 
         for (let i = 0; i < recordCount; i++) {
@@ -26,15 +26,15 @@ class AcknowledgePacket extends Packet {
                 let end = this.readLTriad()
 
                 for (let pack = start; pack <= end; pack++) {
-                    this.#packets.push(pack)
-                    if (this.#packets.length > MaxAcknowledgePackets) {
+                    this.packets.push(pack)
+                    if (this.packets.length > MaxAcknowledgePackets) {
                         throw new Error('Maximum acknowledgement packets size exceeded')
                     }
                 }
             } else {
                 // Single
                 let packet = this.readLTriad()
-                this.#packets.push(packet)
+                this.packets.push(packet)
             }
         }
 
@@ -49,17 +49,17 @@ class AcknowledgePacket extends Packet {
         // we keep them in a temporary stream that will be appended later on
         let stream = new BinaryStream()
         // Sort packets to ensure a correct encoding
-        this.#packets.sort((a, b) => {
-            this.#packets[a] < this.#packets[b]
+        this.packets.sort((a, b) => {
+            this.packets[a] < this.packets[b]
         })
 
-        if (this.#packets.length > 0) {
+        if (this.packets.length > 0) {
             let pointer = 1
-            let start = this.#packets[0]
-            let last = this.#packets[0]
+            let start = this.packets[0]
+            let last = this.packets[0]
 
-            while (pointer < this.#packets.length) {
-                let current = this.#packets[pointer++]
+            while (pointer < this.packets.length) {
+                let current = this.packets[pointer++]
                 let diff = current - last
                 if (diff === 1) {
                     last = current
@@ -93,8 +93,5 @@ class AcknowledgePacket extends Packet {
         this.append(stream.buffer)
     }
 
-    get packets() {
-        return this.#packets
-    }
 }
 module.exports = AcknowledgePacket
