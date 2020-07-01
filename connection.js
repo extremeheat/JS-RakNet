@@ -450,7 +450,7 @@ class Connection {
                     let serverPort = this.#listener.socket.address().port
                     if (dataPacket.address.port === serverPort) {
                         this.#state = Status.Connected
-                        this.#listener.emit('openConnection', this.#address)
+                        this.#listener.emit('openConnection', this)
                     } 
                 } 
             } else if (id === Identifiers.DisconnectNotification) {
@@ -463,6 +463,7 @@ class Connection {
                 pk = new ConnectedPong()
                 pk.clientTimestamp = dataPacket.clientTimestamp
                 pk.serverTimestamp = BigInt(Date.now())
+                pk.write()
 
                 sendPacket = new EncapsulatedPacket()
                 sendPacket.reliability = 0
