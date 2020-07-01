@@ -3,8 +3,10 @@
 // Identifiers used to identify incoming packets
 const Identifiers = {
 
+    ConnectedPing: 0x00,
     UnconnectedPing: 0x01,
     UnconnectedPong: 0x1c,
+    ConnectedPong: 0x03,
     OpenConnectionRequest1: 0x05,
     OpenConnectionReply1: 0x06,
     OpenConnectionRequest2: 0x07,

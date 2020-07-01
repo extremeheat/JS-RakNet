@@ -12,7 +12,6 @@ const OpenConnectionReply1 = require('./protocol/open_connection_reply_1')
 const OpenConnectionRequest2  = require('./protocol/open_connection_request_2')
 const OpenConnectionReply2 = require('./protocol/open_connection_reply_2')
 const IncompatibleProtocolVersion = require('./protocol/incompatible_protoco_version')
-const BitFlags = require('./protocol/bitflags')
 
 'use strict'
 
@@ -204,6 +203,21 @@ class Listener extends EventEmitter {
                 clearInterval(int)
             }
         }, RAKNET_TICK_LENGTH * 1000)
+    }
+
+    /**
+     * Remove a connection from all connections.
+     * 
+     * @param {Connection} connection 
+     * @param {string} reason 
+     */
+    removeConnection(connection, reason) {
+        let id = connection.address.address
+        if (this.#connections.has(id)) {
+            (this.#connections.get(id)).close()
+            this.#connections.delete(id)
+        }
+        this.emit('closeConnection', reason)
     }
 
     /**

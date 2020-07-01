@@ -1,21 +1,28 @@
-const EventEmitter  = require('events')
-
 const BitFlags = require('./protocol/bitflags')
 const InetAddress = require('./utils/inet_address')
 const DataPacket = require('./protocol/data_packet')
 const NACK = require('./protocol/nack')
 const ACK = require('./protocol/ack')
-const Reliability = require('./protocol/reliability')
 const Identifiers = require('./protocol/identifiers')
 const ConnectionRequest = require('./protocol/connection_request')
 const ConnectionRequestAccepted = require('./protocol/connection_request_accepted')
 const EncapsulatedPacket = require('./protocol/encapsulated_packet')
+const NewIncomingConnection = require('./protocol/new_incoming_connection')
+const ConnectedPing = require('./protocol/connected_ping')
+const ConnectedPong = require('./protocol/connected_pong')
+const BinaryStream = require('jsbinaryutils')
 
 'use strict'
 
 const Priority = {
     Normal: 0,
     Immediate: 1
+}
+const Status = {
+    Connecting: 0,
+    Connected: 1,
+    Disconnecting: 2,
+    Disconnected: 3
 }
 class Connection {
 
@@ -25,6 +32,9 @@ class Connection {
     /** @type {InetAddress} */
     #address
 
+    // Client connection state
+    #state = Status.Connecting
+
     // Queue containing sequence numbers of packets not received
     #nackQueue = []
     // Queue containing sequence numbers to let know the game packets we sent
@@ -33,7 +43,10 @@ class Connection {
     #recoveryQueue = new Map()
     // Need documentation
     #packetToSend = []
+    // Queue holding packets to send 
     #sendQueue = new DataPacket()
+
+    #splitPackets = new Map()
 
     // Need documentation
     #windowStart = -1
@@ -49,25 +62,25 @@ class Connection {
     #lastSequenceNumber = -1
     #sendSequenceNumber = 0
 
-    // #messageIndex = 0
-    // #channelIndex = []
+    #messageIndex = 0
+    #channelIndex = []
 
     #needACK = new Map()
-    // #splitID = 0
+    #splitID = 0
 
     // Last timestamp of packet received, helpful for timeout
-    #lastPacketTime = Date.now()
+    #lastUpdate = Date.now()
 
     constructor(listener, mtuSize, address) {
         this.#listener = listener
         this.#mtuSize = mtuSize
         this.#address = address
 
+        this.#lastUpdate = Date.now()
+
         // for (let i = 0; i < 32; i) {
         //     this.#channelIndex[i] = 0
         // }
-
-        this.#listener.emit('test')  // it works!!
     }
 
     update(timestamp) {
@@ -136,12 +149,17 @@ class Connection {
         this.sendQueue()
     }
 
+    disconnect(reason = 'unknown') {
+        this.#listener.removeConnection(this, reason)
+    }
+
     /**
      * Receive session packets
      * 
      * @param {Buffer} buffer 
      */
     receive(buffer) {
+        this.#lastUpdate = Date.now()
         let header = buffer.readUInt8()
         
         if ((header & BitFlags.Valid) == 0) {
@@ -157,8 +175,6 @@ class Connection {
     }
 
     handleDatagram(buffer) {
-        this.#lastPacketTime = Date.now()
-
         let dataPacket = new DataPacket()
         dataPacket.buffer = buffer
         dataPacket.read()
@@ -261,8 +277,7 @@ class Connection {
 
     receivePacket(packet) {
         if (typeof packet.messageIndex === 'undefined') {
-            // Handle the packet directly if it is not a reliable ordered
-            // or if it doesn't have a message index    
+            // Handle the packet directly if it doesn't have a message index    
             this.handlePacket(packet)        
         } else {
             // Seems like we are checking the same stuff like before
@@ -304,7 +319,7 @@ class Connection {
         }
     }
 
-    /* addEncapsulatedToQueue(packet, flags = Priority.Normal) {
+    addEncapsulatedToQueue(packet, flags = Priority.Normal) {
         if ((packet.needACK = (flags & 0b00001000) > 0) === true) {
             this.#needACK.set(packet.identifierACK, [])
         }
@@ -323,7 +338,6 @@ class Connection {
             
         }
 
-        let maxSize = mtuSize - 60
         if (packet.getTotalLength() + 4 > this.#mtuSize) {
             let splitID = ++this.#splitID % 65536
             let splitCount = Math.ceil(packet.buffer.length / maxSize)
@@ -355,7 +369,8 @@ class Connection {
         } else {
             this.addToQueue(packet, flags)
         }
-    } */
+    } 
+    
 
     /**
      * Adds a packet into the queue
@@ -403,32 +418,96 @@ class Connection {
      */
     handlePacket(packet) {
         if (packet.split) {
-            console.log('SPLIT')
+            this.handleSplit(packet)
             return
         }
 
         let id = packet.buffer.readUInt8()
-        let dataPacket, pk
-        switch (id) {
-            case Identifiers.ConnectionRequest:
-                dataPacket = new ConnectionRequest()
+        let dataPacket, pk, sendPacket
+
+        if (id < 0x80) {
+            if (this.#state === Status.Connecting) {
+                if (id === Identifiers.ConnectionRequest) {
+                    dataPacket = new ConnectionRequest()
+                    dataPacket.buffer = packet.buffer
+                    dataPacket.read()
+    
+                    pk = new ConnectionRequestAccepted()
+                    pk.clientAddress = this.#address
+                    pk.requestTimestamp = dataPacket.requestTimestamp
+                    pk.accpetedTimestamp = BigInt(Date.now())
+                    pk.write()
+    
+                    sendPacket = new EncapsulatedPacket()
+                    sendPacket.reliability = 0
+                    sendPacket.buffer = pk.buffer
+                    this.addToQueue(sendPacket, Priority.Immediate)
+                } else if (id === Identifiers.NewIncomingConnection) {
+                    dataPacket = new NewIncomingConnection()
+                    dataPacket.buffer = packet.buffer
+                    dataPacket.read()
+
+                    let serverPort = this.#listener.socket.address().port
+                    if (dataPacket.address.port === serverPort) {
+                        this.#state = Status.Connected
+                        this.#listener.emit('openConnection', this.#address)
+                    } 
+                } 
+            } else if (id === Identifiers.DisconnectNotification) {
+                this.disconnect('client disconnect')
+            } else if (id === Identifiers.ConnectedPing) {
+                dataPacket = new ConnectedPing()
                 dataPacket.buffer = packet.buffer
                 dataPacket.read()
 
-                pk = new ConnectionRequestAccepted()
-                pk.clientAddress = this.#address
-                pk.requestTimestamp = dataPacket.requestTimestamp
-                pk.accpetedTimestamp = BigInt(Date.now())
-                pk.write()
+                pk = new ConnectedPong()
+                pk.clientTimestamp = dataPacket.clientTimestamp
+                pk.serverTimestamp = BigInt(Date.now())
 
-                let sendPacket = new EncapsulatedPacket()
+                sendPacket = new EncapsulatedPacket()
                 sendPacket.reliability = 0
                 sendPacket.buffer = pk.buffer
-                this.addToQueue(sendPacket, Priority.Immediate)
-            break   
-            case Identifiers.NewIncomingConnection:
-                console.log('NEW INCOMING')
-                break 
+                this.addToQueue(sendPacket)
+            }
+        } else if (this.#state === Status.Connected) {
+            console.log(packet.buffer)
+            this.#listener.emit('encapsulated', packet, this.#address)  // To fit in software needs later
+        }
+    }
+
+    /**
+     * Handles a splitted packet.
+     * 
+     * @param {EncapsulatedPacket} packet 
+     */
+    handleSplit(packet) {
+        if (this.#splitPackets.has(packet.splitID)) {
+            let value = this.#splitPackets.get(packet.splitID)
+            value.set(packet.splitIndex, packet)
+            this.#splitPackets.set(packet.splitID, value)
+        } else {
+            this.#splitPackets.set(packet.splitID, new Map([[packet.splitIndex, packet]]))
+        }
+
+        // If we have all pieces, put them together
+        let localSplits = this.#splitPackets.get(packet.splitID)
+        if (localSplits.size === packet.splitCount) {
+            let pk = new EncapsulatedPacket()
+        
+            // pk.reliability = packet.reliability
+            // pk.messageIndex = packet.messageIndex
+            // pk.sequenceIndex = packet.sequenceIndex
+            // pk.orderIndex = packet.orderIndex
+            // pk.orderChannel = packet.orderChannel
+        
+            let stream = new BinaryStream()
+            for (let [_, packet] of localSplits) {
+                stream.append(packet.buffer)
+            }
+            this.#splitPackets.delete(packet.splitID)
+        
+            pk.buffer = stream.buffer
+            this.receivePacket(pk)
         }
     }
 
@@ -445,6 +524,15 @@ class Connection {
     sendPacket(packet) {
         packet.write()
         this.#listener.sendBuffer(packet.buffer, this.#address.address, this.#address.port)
+    }
+
+    close() {
+        let stream = new BinaryStream(Buffer.from('\x00\x00\x08\x15', 'binary'))
+        this.addEncapsulatedToQueue(EncapsulatedPacket.fromBinary(stream), Priority.Immediate)  // Client discconect packet 0x15
+    }
+
+    get address() {
+        return this.#address
     }
     
 }
