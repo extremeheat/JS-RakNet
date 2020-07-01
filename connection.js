@@ -470,7 +470,6 @@ class Connection {
                 this.addToQueue(sendPacket)
             }
         } else if (this.#state === Status.Connected) {
-            console.log(packet.buffer)
             this.#listener.emit('encapsulated', packet, this.#address)  // To fit in software needs later
         }
     }

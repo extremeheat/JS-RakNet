@@ -217,7 +217,7 @@ class Listener extends EventEmitter {
             (this.#connections.get(id)).close()
             this.#connections.delete(id)
         }
-        this.emit('closeConnection', reason)
+        this.emit('closeConnection', connection.address, reason)
     }
 
     /**
