@@ -339,32 +339,31 @@ class Connection {
         }
 
         if (packet.getTotalLength() + 4 > this.#mtuSize) {
+            // Split the buffer into chunks
+            let buffers = [], i = 0, splitIndex = 0
+            while (i < packet.buffer.length) {
+                // Push format: [chunk index: int, chunk: buffer]
+                buffers.push([(splitIndex += 1) - 1, packet.buffer.slice(i, i += this.#mtuSize - 34)])
+            }
             let splitID = ++this.#splitID % 65536
-            let splitCount = Math.ceil(packet.buffer.length / maxSize)
-            let splitIndex = 0
-            while (!typeof packet.buffer[packet.offset] === 'undefined') {
-                let buffer = packet.buffer.slice(packet.offset, packet.offset = packet.offset + maxSize)
+            for (let [count, buffer] of buffers) {
                 let pk = new EncapsulatedPacket()
-                pk.split = true
                 pk.splitID = splitID
-                pk.splitCount = splitCount
+                pk.split = true
+                pk.splitCount = buffers.length
                 pk.reliability = packet.reliability
-                pk.splitIndex = splitIndex
+                pk.splitIndex = count
                 pk.buffer = buffer
-
-                if (splitIndex > 0) {
+                if (count > 0) {
                     pk.messageIndex = this.#messageIndex++
                 } else {
-                    pk.messageIndex = packet.messageIndex  
+                    pk.messageIndex = packet.messageIndex
                 }
-               
                 if (pk.reliability === 3) {
                     pk.orderChannel = packet.orderChannel
                     pk.orderIndex = packet.orderIndex
                 }
-
                 this.addToQueue(pk, flags | Priority.Immediate)
-                splitIndex++
             }
         } else {
             this.addToQueue(packet, flags)
