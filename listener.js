@@ -16,7 +16,7 @@ const IncompatibleProtocolVersion = require('./protocol/incompatible_protoco_ver
 'use strict'
 
 // Used if no motd is given in constructor
-const DUMMY_MOTD = 'MCPE;JSRakNet;407;1.16.0;0;5;server_id;JSRakNet;Creative;1;19132;19132;'
+const DUMMY_MOTD = 'MCPE;JSRakNet;407;1.16.0;0;5;server_id;JSRakNet;Creative;1;'
 const PROTOCOL = 10  // Minecraft related protocol 
 
 // Raknet ticks
