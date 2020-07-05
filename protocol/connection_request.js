@@ -19,12 +19,27 @@ class ConnectionRequest extends Packet {
         this.readByte()  // secure
     }
 
+    write() {
+        super.write()
+        this.writeLong(this.#clientGUID)
+        this.writeLong(this.requestTimestamp)
+        this.writeByte(0)  // secure
+    }
+
     get clientGUID() {
         return this.#clientGUID
     }
 
+    set clientGUID(clientGUID) {
+        this.#clientGUID = clientGUID
+    }
+
     get requestTimestamp() {
         return this.#requestTimestamp
+    }
+
+    set requestTimestamp(requestTimestamp) {
+        this.#requestTimestamp = requestTimestamp
     }
     
 }
