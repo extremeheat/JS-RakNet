@@ -14,6 +14,17 @@ class ConnectionRequestAccepted extends Packet {
     #requestTimestamp
     #acceptedTimestamp
 
+    read() {
+        super.read()
+        this.#clientAddress = this.readAddress()
+        this.readShort()  // unknown
+        for (let i = 0; i < 20; i++) {
+            this.readAddress()
+        }
+        this.#requestTimestamp = this.readLong()
+        this.#acceptedTimestamp = this.readLong()
+    }
+
     write() {
         super.write()
         this.writeAddress(this.#clientAddress)
