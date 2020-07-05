@@ -28,6 +28,11 @@ class Packet extends BinaryStream {
         this.writeByte(this.id)
     }
 
+    // Reads a string from the buffer
+    readString() {
+        this.read(this.readShort())
+    }
+
     // Writes a string length + buffer 
     // valid only for offline packets
     writeString(v) {

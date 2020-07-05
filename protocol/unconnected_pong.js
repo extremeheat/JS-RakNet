@@ -16,6 +16,14 @@ class UnconnectedPong extends OfflinePacket {
     /** @type {string} */
     #serverName
 
+    read() {
+        super.read()
+        this.#sendTimestamp = this.readLong()
+        this.#serverGUID = this.readLong()
+        this.readMagic()
+        this.#serverName = this.readString()
+    }
+
     write() {
         super.write()
         this.writeLong(this.#sendTimestamp)
@@ -24,17 +32,26 @@ class UnconnectedPong extends OfflinePacket {
         this.writeString(this.#serverName)
     }
 
-    /** @param {number} sendTimestamp */
+    get sendTimestamp() {
+        return this.#sendTimestamp
+    }
+
     set sendTimestamp(sendTimestamp) {
         this.#sendTimestamp = sendTimestamp
     }
 
-    /** @param {number} serverGUID */
+    get serverGUID() {
+        return this.#serverGUID
+    }
+
     set serverGUID(serverGUID) {
         this.#serverGUID = serverGUID
     }
 
-    /** @param {string} serverName */
+    get serverName() {
+        return this.#serverName
+    }
+
     set serverName(serverName) {
         this.#serverName = serverName
     }

@@ -9,11 +9,24 @@ class ConnectedPing extends Packet {
         super(Identifiers.ConnectedPing)
     }
 
-    clientTimestamp
+    #clientTimestamp
 
     read() {
         super.read()
         this.clientTimestamp = this.readLong()
+    }
+
+    write() {
+        super.write()
+        this.writeLong(this.clientTimestamp)
+    }
+
+    get clientTimestamp() {
+        return this.#clientTimestamp
+    }
+
+    set clientTimestamp(clientTimestamp) {
+        this.#clientTimestamp = clientTimestamp
     }
     
 }

@@ -17,6 +17,15 @@ class OpenConnectionReply2 extends OfflinePacket {
     /** @type {number} */
     #mtuSize
 
+    read() {
+        super.read()
+        this.readMagic()
+        this.#serverGUID = this.readLong()
+        this.#clientAddress = this.readAddress()
+        this.#mtuSize = this.readShort()
+        this.readByte()  // secure
+    }
+
     write() {
         super.write()
         this.writeMagic()
@@ -26,12 +35,24 @@ class OpenConnectionReply2 extends OfflinePacket {
         this.writeByte(0)  // secure
     }
 
+    get serverGUID() {
+        return this.#serverGUID
+    }
+
     set serverGUID(serverGUID) {
         this.#serverGUID = serverGUID
     }
 
+    get clientAddress() {
+        return this.#clientAddress
+    }
+
     set clientAddress(clientAddress) {
         this.#clientAddress = clientAddress
+    }
+
+    get mtuSize() {
+        return this.#mtuSize
     }
 
     set mtuSize(mtuSize) {
