@@ -37,12 +37,24 @@ class ConnectionRequestAccepted extends Packet {
         this.writeLong(this.#acceptedTimestamp)
     }
 
+    get clientAddress() {
+        return this.#clientAddress
+    }
+
     set clientAddress(clientAddress) {
         this.#clientAddress = clientAddress
     }
 
+    get requestTimestamp() {
+        return this.#requestTimestamp
+    }
+
     set requestTimestamp(requestTimestamp) {
         return this.#requestTimestamp = requestTimestamp
+    }
+
+    get accpetedTimestamp() {
+        return this.#acceptedTimestamp
     }
 
     set accpetedTimestamp(accpetedTimestamp) {
