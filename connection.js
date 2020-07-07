@@ -53,7 +53,7 @@ class Connection {
     #windowEnd = 2048
     #reliableWindowStart = 0
     #reliableWindowEnd = 2048
-    #reliableWindow = []
+    #reliableWindow = new Map()
     #lastReliableIndex = -1
 
     // Array containing received sequence numbers
@@ -295,7 +295,7 @@ class Connection {
                 this.#reliableWindowEnd++
                 this.handlePacket(packet)
 
-                if (this.#reliableWindow.length > 0) {
+                if (this.#reliableWindow.size > 0) {
                     // TODO: sort reliable window
 
                     for (let [seqIndex, pk] of this.#reliableWindow) {
@@ -307,14 +307,11 @@ class Connection {
                         this.#reliableWindowEnd++
                         this.handlePacket(pk)
 
-                        let index = this.#reliableWindow.indexOf(index)
-                        if (index > -1) {
-                            this.#reliableWindow.splice(index, 1)
-                        }
+                        this.#reliableWindow.delete(seqIndex)
                     }
                 }
             } else {
-                this.#reliableWindow.push([packet.messageIndex, packet])
+                this.#reliableWindow.set(packet.messageIndex, packet)
             }
         }
     }
