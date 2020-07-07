@@ -314,7 +314,7 @@ class Connection {
                     }
                 }
             } else {
-                this.#reliableWindow[packet.messageIndex] = packet
+                this.#reliableWindow.push([packet.messageIndex, packet])
             }
         }
     }
