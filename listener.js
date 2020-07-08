@@ -71,8 +71,9 @@ class Listener extends EventEmitter {
         // I have an idea for reconnection, but maybe can be fixed soon
         // using another method from session itself
 
-        if (this.connections.has(rinfo.address)) {
-            let connection = this.connections.get(rinfo.address)
+        let token = `${rinfo.address}:${rinfo.port}`
+        if (this.#connections.has(token)) {
+            let connection = this.#connections.get(token)
             connection.receive(buffer)
         } else {
             switch(header) {
@@ -187,8 +188,9 @@ class Listener extends EventEmitter {
         packet.write()
 
         // Create a session
+        let token = `${address.address}:${address.port}`
         let conn = new Connection(this, decodedPacket.mtuSize, address)
-        this.#connections.set(address.address, conn)
+        this.#connections.set(token, conn)
 
         return packet.buffer
     }
@@ -212,10 +214,11 @@ class Listener extends EventEmitter {
      * @param {string} reason 
      */
     removeConnection(connection, reason) {
-        let id = connection.address.address
-        if (this.#connections.has(id)) {
-            (this.#connections.get(id)).close()
-            this.#connections.delete(id)
+        let inetAddr = connection.address
+        let token = `${inetAddr.address}:${inetAddr.port}`
+        if (this.#connections.has(token)) {
+            (this.#connections.get(token)).close()
+            this.#connections.delete(token)
         }
         this.emit('closeConnection', connection.address, reason)
     }

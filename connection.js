@@ -70,6 +70,7 @@ class Connection {
 
     // Last timestamp of packet received, helpful for timeout
     #lastUpdate = Date.now()
+    #isActive = false
 
     constructor(listener, mtuSize, address) {
         this.#listener = listener
@@ -78,13 +79,17 @@ class Connection {
 
         this.#lastUpdate = Date.now()
 
-        // for (let i = 0; i < 32; i) {
-        //     this.#channelIndex[i] = 0
-        // }
+        for (let i = 0; i < 32; i++) {
+            this.#channelIndex[i] = 0
+        }
     }
 
     update(timestamp) {
-        // TODO: timeout
+        if (!this.#isActive && (this.#lastUpdate + 10000) < timestamp) {
+            this.disconnect('timeout')
+            return
+        } 
+        this.#isActive = false
 
         // Send ACKs
         if (this.#ackQueue.length > 0) {
@@ -159,6 +164,7 @@ class Connection {
      * @param {Buffer} buffer 
      */
     receive(buffer) {
+        this.#isActive = true
         this.#lastUpdate = Date.now()
         let header = buffer.readUInt8()
         
@@ -296,7 +302,7 @@ class Connection {
                 this.handlePacket(packet)
 
                 if (this.#reliableWindow.size > 0) {
-                    // TODO: sort reliable window
+                    this.#reliableWindow.sort((a, b) => b[0] - a[0])
 
                     for (let [seqIndex, pk] of this.#reliableWindow) {
                         if ((seqIndex - this.#lastReliableIndex) !== 1) {
