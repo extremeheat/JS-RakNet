@@ -44,13 +44,11 @@ class Listener extends EventEmitter {
      * @param {number} port 
      * @param {string} name 
      */
-    listen(address, port, name) {
+    async listen(address, port, name) {
         this.#socket = Dgram.createSocket({ type: 'udp4' })
         this.#name = name
         
-        this.#socket.on('error', (e) => {
-            throw e
-        })
+        
 
         this.#socket.on('listening', () => {
             console.log(`JSRakNode is now listening on ${address}:${port}`)
@@ -60,7 +58,16 @@ class Listener extends EventEmitter {
             this.handle(buffer, rinfo)
         })
 
-        this.#socket.bind(port, address)
+        await new Promise((resolve, reject) => {
+            const failFn = e => reject(e)
+            
+            this.#socket.once('error', failFn)
+            this.#socket.bind(port, address, () => {
+                this.#socket.removeListener('error', failFn)
+                resolve()
+            })
+        })
+        
         this.tick()  // tick sessions
         return this
     }
