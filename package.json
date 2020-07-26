@@ -1,6 +1,6 @@
 {
   "name": "jsraknet",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Basic RakNet implementation written in Javascript",
   "main": "listener.js",
   "scripts": {
