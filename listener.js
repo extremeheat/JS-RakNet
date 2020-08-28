@@ -3,6 +3,7 @@ const Crypto = require('crypto')
 const EventEmitter  = require('events')
 
 const Connection = require('./connection')
+const ServerName = require('./utils/server_name')
 const InetAddress = require('./utils/inet_address')
 const Identifiers = require('./protocol/identifiers')
 const UnconnectedPing = require('./protocol/unconnected_ping')
@@ -15,9 +16,8 @@ const IncompatibleProtocolVersion = require('./protocol/incompatible_protoco_ver
 
 'use strict'
 
-// Used if no motd is given in constructor
-const DUMMY_MOTD = 'MCPE;JSRakNet;407;1.16.0;0;5;server_id;JSRakNet;Creative;'
-const PROTOCOL = 10  // Minecraft related protocol 
+// Minecraft related protocol 
+const PROTOCOL = 10
 
 // Raknet ticks
 const RAKNET_TPS = 100
@@ -28,8 +28,8 @@ class Listener extends EventEmitter {
 
     /** @type {number} */
     #id = Crypto.randomBytes(8).readBigInt64BE()  // Generate a signed random 64 bit GUID
-    /** @type {string} */
-    #name
+    /** @type {ServerName} */
+    #name = new ServerName()
     /** @type {Dgram.Socket} */
     #socket
     /** @type {Map<string, Connection>} */
@@ -42,14 +42,11 @@ class Listener extends EventEmitter {
      * 
      * @param {string} address 
      * @param {number} port 
-     * @param {string} name 
      */
-    async listen(address, port, name) {
+    async listen(address, port) {
         this.#socket = Dgram.createSocket({ type: 'udp4' })
-        this.#name = name
+        this.#name.setServerId(this.#id)
         
-        
-
         this.#socket.on('listening', () => {
             console.log(`JSRakNode is now listening on ${address}:${port}`)
         })
@@ -124,19 +121,8 @@ class Listener extends EventEmitter {
         packet = new UnconnectedPong() 
         packet.sendTimestamp = decodedPacket.sendTimeStamp
         packet.serverGUID = this.#id
-
-        // Prepare a default server name
-        // in case the user didn't give a proper one
-        if (!this.#name || typeof this.#name !== 'string') {
-            this.#name = DUMMY_MOTD
-        }
-
-        // Replace MOTD server id with an actual one
-        let name = this.#name.split(';')
-        name[6] = `${this.#id}`
-        name = name.join(';')
                 
-        packet.serverName = name
+        packet.serverName = this.#name.toString()
         packet.write()
 
         return packet.buffer

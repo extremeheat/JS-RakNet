@@ -121,7 +121,7 @@ class Connection {
             }
 
             // Packet queue bigger than limit
-            if (this.#packetToSend > 2048) {
+            if (this.#packetToSend.length > 2048) {
                 this.#packetToSend = []
             }
         }
