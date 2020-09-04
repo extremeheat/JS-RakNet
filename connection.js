@@ -302,8 +302,15 @@ class Connection {
                 this.handlePacket(packet)
 
                 if (this.#reliableWindow.size > 0) {
-                    // Map can't be sorted, soon will be fixed 
-                    // TODO: this.#reliableWindow.sort((a, b) => b[0] - a[0])
+                    let windows = [...this.#reliableWindow.entries]
+                    let reliableWindow = new Map()
+                    windows.sort((a, b) => a[0] - b[0])
+
+                    for (const [k, v] of windows) {
+                        reliableWindow.set(k, v)
+                    }
+
+                    this.#reliableWindow = reliableWindow;
 
                     for (let [seqIndex, pk] of this.#reliableWindow) {
                         if ((seqIndex - this.#lastReliableIndex) !== 1) {
