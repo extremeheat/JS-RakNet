@@ -310,7 +310,7 @@ class Connection {
                         reliableWindow.set(k, v)
                     }
 
-                    this.#reliableWindow = reliableWindow;
+                    this.#reliableWindow = reliableWindow
 
                     for (let [seqIndex, pk] of this.#reliableWindow) {
                         if ((seqIndex - this.#lastReliableIndex) !== 1) {

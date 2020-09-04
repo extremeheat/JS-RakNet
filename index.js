@@ -11,7 +11,7 @@ class Index {
             console.log('Got a new connection')
         })
         this.listener.on('unconnectedPong', (query) => {
-            query.setMotd('Rewritten MOTD');
+            query.setMotd('Rewritten MOTD')
         })
     }
 
