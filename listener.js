@@ -121,8 +121,15 @@ class Listener extends EventEmitter {
         packet = new UnconnectedPong() 
         packet.sendTimestamp = decodedPacket.sendTimeStamp
         packet.serverGUID = this.#id
+
+        let serverQuery = this.#name
+
+        /**
+         * @param {ServerName} serverQuery
+         */
+        this.emit('unconnectedPong', serverQuery)
                 
-        packet.serverName = this.#name.toString()
+        packet.serverName = serverQuery.toString()
         packet.write()
 
         return packet.buffer
