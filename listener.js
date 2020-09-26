@@ -48,7 +48,7 @@ class Listener extends EventEmitter {
         this.#name.setServerId(this.#id)
         
         this.#socket.on('listening', () => {
-            console.log(`JSRakNode is now listening on ${address}:${port}`)
+            this.emit('listening', address, port)
         })
 
         this.#socket.on('message', (buffer, rinfo) => {
