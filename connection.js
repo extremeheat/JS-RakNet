@@ -302,7 +302,7 @@ class Connection {
                 this.handlePacket(packet)
 
                 if (this.#reliableWindow.size > 0) {
-                    let windows = [...this.#reliableWindow.entries]
+                    let windows = [...this.#reliableWindow.entries()]
                     let reliableWindow = new Map()
                     windows.sort((a, b) => a[0] - b[0])
 
