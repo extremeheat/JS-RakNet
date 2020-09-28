@@ -114,7 +114,6 @@ class Connection {
                 this.#recoveryQueue.set(pk.sequenceNumber, pk)
                 let index = this.#packetToSend.indexOf(pk)
                 this.#packetToSend.splice(index, 1)
-                this.sendPacket(pk)
 
                 if (--limit <= 0) {
                     break
