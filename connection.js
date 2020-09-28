@@ -108,12 +108,13 @@ class Connection {
 
         if (this.#packetToSend.length > 0) {
             let limit = 16
-            for (let pk of this.#packetToSend) {
+            for (let pk of this.#packetToSend) {          
                 pk.sendTime = timestamp  // To implement
                 pk.write()
                 this.#recoveryQueue.set(pk.sequenceNumber, pk)
                 let index = this.#packetToSend.indexOf(pk)
                 this.#packetToSend.splice(index, 1)
+                this.sendPacket(pk)
 
                 if (--limit <= 0) {
                     break
@@ -433,25 +434,14 @@ class Connection {
         }
 
         let id = packet.buffer.readUInt8()
-        let dataPacket, pk, sendPacket
+        let dataPacket
 
         if (id < 0x80) {
             if (this.#state === Status.Connecting) {
                 if (id === Identifiers.ConnectionRequest) {
-                    dataPacket = new ConnectionRequest()
-                    dataPacket.buffer = packet.buffer
-                    dataPacket.read()
-    
-                    pk = new ConnectionRequestAccepted()
-                    pk.clientAddress = this.#address
-                    pk.requestTimestamp = dataPacket.requestTimestamp
-                    pk.accpetedTimestamp = BigInt(Date.now())
-                    pk.write()
-    
-                    sendPacket = new EncapsulatedPacket()
-                    sendPacket.reliability = 0
-                    sendPacket.buffer = pk.buffer
-                    this.addToQueue(sendPacket, Priority.Immediate)
+                    this.handleConnectionRequest(packet.buffer).then(encapsulated => {
+                        this.addToQueue(encapsulated, Priority.Immediate)
+                    })
                 } else if (id === Identifiers.NewIncomingConnection) {
                     dataPacket = new NewIncomingConnection()
                     dataPacket.buffer = packet.buffer
@@ -466,24 +456,51 @@ class Connection {
             } else if (id === Identifiers.DisconnectNotification) {
                 this.disconnect('client disconnect')
             } else if (id === Identifiers.ConnectedPing) {
-                dataPacket = new ConnectedPing()
-                dataPacket.buffer = packet.buffer
-                dataPacket.read()
-
-                pk = new ConnectedPong()
-                pk.clientTimestamp = dataPacket.clientTimestamp
-                pk.serverTimestamp = BigInt(Date.now())
-                pk.write()
-
-                sendPacket = new EncapsulatedPacket()
-                sendPacket.reliability = 0
-                sendPacket.buffer = pk.buffer
-                this.addToQueue(sendPacket)
+                this.handleConnectedPing(packet.buffer).then(encapsulated => {
+                    this.addToQueue(encapsulated)
+                })
             }
         } else if (this.#state === Status.Connected) {
             this.#listener.emit('encapsulated', packet, this.#address)  // To fit in software needs later
         }
     }
+
+    // Async encapsulated handlers
+
+    async handleConnectionRequest(buffer) {
+        let dataPacket = new ConnectionRequest()
+        dataPacket.buffer = buffer
+        dataPacket.read()
+
+        let pk = new ConnectionRequestAccepted()
+        pk.clientAddress = this.#address
+        pk.requestTimestamp = dataPacket.requestTimestamp
+        pk.accpetedTimestamp = BigInt(Date.now())
+        pk.write()
+
+        let sendPacket = new EncapsulatedPacket()
+        sendPacket.reliability = 0
+        sendPacket.buffer = pk.buffer
+
+        return sendPacket
+    }
+
+    async handleConnectedPing(buffer) {
+        let dataPacket = new ConnectedPing()
+        dataPacket.buffer = buffer
+        dataPacket.read()
+
+        let pk = new ConnectedPong()
+        pk.clientTimestamp = dataPacket.clientTimestamp
+        pk.serverTimestamp = BigInt(Date.now())
+        pk.write()
+
+        let sendPacket = new EncapsulatedPacket()
+        sendPacket.reliability = 0
+        sendPacket.buffer = pk.buffer
+
+        return sendPacket
+    } 
 
     /**
      * Handles a splitted packet.
@@ -503,15 +520,8 @@ class Connection {
         let localSplits = this.#splitPackets.get(packet.splitID)
         if (localSplits.size === packet.splitCount) {
             let pk = new EncapsulatedPacket()
-        
-            // pk.reliability = packet.reliability
-            // pk.messageIndex = packet.messageIndex
-            // pk.sequenceIndex = packet.sequenceIndex
-            // pk.orderIndex = packet.orderIndex
-            // pk.orderChannel = packet.orderChannel
-        
             let stream = new BinaryStream()
-            for (let [_, packet] of localSplits) {
+            for (let packet of localSplits.values()) {
                 stream.append(packet.buffer)
             }
             this.#splitPackets.delete(packet.splitID)

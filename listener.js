@@ -46,10 +46,6 @@ class Listener extends EventEmitter {
     async listen(address, port) {
         this.#socket = Dgram.createSocket({ type: 'udp4' })
         this.#name.setServerId(this.#id)
-        
-        this.#socket.on('listening', () => {
-            this.emit('listening', address, port)
-        })
 
         this.#socket.on('message', (buffer, rinfo) => {
             this.handle(buffer, rinfo)
@@ -71,9 +67,6 @@ class Listener extends EventEmitter {
 
     handle(buffer, rinfo) {
         let header = buffer.readUInt8()  // Read packet header to recognize packet type
-
-        // I have an idea for reconnection, but maybe can be fixed soon
-        // using another method from session itself
 
         let token = `${rinfo.address}:${rinfo.port}`
         if (this.#connections.has(token)) {
