@@ -1,5 +1,5 @@
 {
-  "name": "jsraknet",
+  "name": "@jsprismarine/raknet",
   "version": "1.2.7",
   "description": "Basic RakNet implementation written in Javascript",
   "main": "listener.js",
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/HerryYT/JSRakNet.git"
+    "url": "git+https://github.com/JSPrismarine/RakNet.git"
   },
   "keywords": [
     "nodejs",
@@ -17,9 +17,9 @@
   "author": "HerryYT",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/HerryYT/JSRakNet/issues"
+    "url": "https://github.com/JSPrismarine/RakNet/issues"
   },
-  "homepage": "https://github.com/HerryYT/JSRakNet#readme",
+  "homepage": "https://github.com/JSPrismarine/RakNet#readme",
   "dependencies": {
     "jsbinaryutils": "^1.0.5"
   }
