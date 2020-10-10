@@ -1,5 +1,5 @@
 const Packet = require('./packet')
-const BinaryStream = require('jsbinaryutils')
+const BinaryStream = require('@jsprismarine/jsbinaryutils').default
 
 'use strict'
 

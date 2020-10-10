@@ -1,5 +1,5 @@
 const Listener = require('./listener')
-const BinaryStream = require('jsbinaryutils')
+const BinaryStream = require('@jsprismarine/jsbinaryutils').default
 const DataPacket = require('./protocol/data_packet')
 
 // Script intended to test, it istantiate a new RakNet listener 

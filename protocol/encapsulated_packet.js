@@ -1,6 +1,6 @@
 const BitFlags = require('./bitflags')
 const Reliability = require('./reliability')
-const BinaryStream = require('jsbinaryutils')
+const BinaryStream = require('@jsprismarine/jsbinaryutils').default
 
 'use strict'
 

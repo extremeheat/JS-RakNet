@@ -10,7 +10,7 @@ const EncapsulatedPacket = require('./protocol/encapsulated_packet')
 const NewIncomingConnection = require('./protocol/new_incoming_connection')
 const ConnectedPing = require('./protocol/connected_ping')
 const ConnectedPong = require('./protocol/connected_pong')
-const BinaryStream = require('jsbinaryutils')
+const BinaryStream = require('@jsprismarine/jsbinaryutils').default
 
 'use strict'
 

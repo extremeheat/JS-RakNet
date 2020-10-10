@@ -1,4 +1,4 @@
-const BinaryStream = require('jsbinaryutils')
+const BinaryStream = require('@jsprismarine/jsbinaryutils').default
 const InetAddress = require('../utils/inet_address')
 
 'use strict'
