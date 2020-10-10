@@ -27,7 +27,7 @@ class OpenConnectionRequest1 extends OfflinePacket {
         this.writeByte(this.#protocol)
         let length = (this.#mtuSize - this.buffer.length)
         let buf = Buffer.alloc(length).fill(0x00)
-        this.write(buf)
+        this.append(buf)
     }
 
     get mtuSize() {

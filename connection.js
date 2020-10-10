@@ -521,7 +521,7 @@ class Connection {
             let pk = new EncapsulatedPacket()
             let stream = new BinaryStream()
             for (let packet of localSplits.values()) {
-                stream.write(packet.buffer)
+                stream.append(packet.buffer)
             }
             this.#splitPackets.delete(packet.splitID)
         

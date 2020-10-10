@@ -90,7 +90,7 @@ class AcknowledgePacket extends Packet {
         }
 
         this.writeShort(records)
-        this.write(stream.buffer)
+        this.append(stream.buffer)
     }
 
 }

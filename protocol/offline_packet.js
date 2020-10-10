@@ -14,7 +14,7 @@ class OfflinePacket extends Packet {
     }
 
     writeMagic() {
-        this.write(Buffer.from(MAGIC, 'binary'))
+        this.append(Buffer.from(MAGIC, 'binary'))
     }
 
     get valid() {
