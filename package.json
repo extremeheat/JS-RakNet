@@ -1,6 +1,6 @@
 {
   "name": "@jsprismarine/raknet",
-  "version": "1.3.2",
+  "version": "1.3.4",
   "description": "Basic RakNet implementation written in Javascript",
   "main": "listener.js",
   "scripts": {
@@ -21,6 +21,6 @@
   },
   "homepage": "https://github.com/JSPrismarine/RakNet#readme",
   "dependencies": {
-    "@jsprismarine/jsbinaryutils": "2.0.0"
+    "@jsprismarine/jsbinaryutils": "2.1.1"
   }
 }
