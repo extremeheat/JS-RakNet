@@ -30,7 +30,7 @@ class DataPacket extends Packet {
         super.write()
         this.writeLTriad(this.#sequenceNumber)
         for (let packet of this.packets) {
-            this.append(packet instanceof EncapsulatedPacket ? packet.toBinary() : packet.buffer)
+            this.write(packet instanceof EncapsulatedPacket ? packet.toBinary() : packet.buffer)
         }
     }
 

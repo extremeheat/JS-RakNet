@@ -92,7 +92,7 @@ class EncapsulatedPacket {
             stream.writeInt(this.#splitIndex)
         }
 
-        stream.append(this.buffer)
+        stream.write(this.buffer)
         return stream
     }
 

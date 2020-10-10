@@ -37,7 +37,7 @@ class Packet extends BinaryStream {
     // valid only for offline packets
     writeString(v) {
         this.writeShort(Buffer.byteLength(v))
-        this.append(Buffer.from(v, 'utf-8'))
+        this.write(Buffer.from(v, 'utf-8'))
     }
 
     // Reads a RakNet address passed into the buffer 
