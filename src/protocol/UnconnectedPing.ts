@@ -10,6 +10,6 @@ export default class UnconnectedPing extends Packet implements IPacket {
     
     decode(): void {
         super.decode()
-        this.writeLong()
+        // this.writeLong()
     }
 }
