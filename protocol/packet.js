@@ -8,6 +8,7 @@ class Packet extends BinaryStream {
 
     /** @type {number} */
     id
+    #encoded = false
     
     constructor( id ) {
         super()
@@ -20,11 +21,14 @@ class Packet extends BinaryStream {
 
     // Decodes packet buffer
     read() {
+        this.#encoded = true
         this.readByte()  // Skip the packet ID
     }
 
     // Encodes packet buffer
     write() {
+        if (this.#encoded) return
+        this.#encoded = true
         this.writeByte(this.id)
     }
 
