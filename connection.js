@@ -114,6 +114,7 @@ class Connection {
                 this.#recoveryQueue.set(pk.sequenceNumber, pk)
                 let index = this.#packetToSend.indexOf(pk)
                 this.#packetToSend.splice(index, 1)
+                this.sendPacket(pk)
 
                 if (--limit <= 0) {
                     break
@@ -136,7 +137,7 @@ class Connection {
         }
 
         for (let [seq, pk] of this.#recoveryQueue) {
-            if (pk.sendTime < (Date.now() - 8)) {
+            if (pk.sendTime < (Date.now() - 8000)) {
                 this.#packetToSend.push(pk)
                 this.#recoveryQueue.delete(seq)
             }
@@ -272,7 +273,7 @@ class Connection {
         for (let seq of packet.packets) {
             if (this.#recoveryQueue.has(seq)) {
                 let pk = this.#recoveryQueue.get(seq)
-                pk.sequenceNumber = this.sequenceNumber++
+                pk.sequenceNumber = this.#sendSequenceNumber++
 
                 this.#packetToSend.push(pk)
 
