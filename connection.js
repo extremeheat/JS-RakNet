@@ -342,7 +342,7 @@ class Connection {
             packet.reliability === 6 ||
             packet.reliability === 7) 
         {
-            packet.messageIndex = this.messageIndex++
+            packet.messageIndex = this.#messageIndex++
 
             if (packet.reliability === 3) {
                 packet.orderIndex = this.#channelIndex[packet.orderChannel]++
@@ -392,7 +392,7 @@ class Connection {
     addToQueue(pk, flags = Priority.Normal) {
         let priority = flags & 0b0000111
         if (pk.needACK && typeof pk.messageIndex !== 'undefined') {
-            this.needACK.set(pk.identifierACK, pk.messageIndex)
+            this.#needACK.set(pk.identifierACK, pk.messageIndex)
         }
         if (priority === Priority.Immediate) {
             let packet = new DataPacket()

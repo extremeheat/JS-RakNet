@@ -1,6 +1,6 @@
 {
   "name": "@jsprismarine/raknet",
-  "version": "1.4.6",
+  "version": "1.4.7",
   "description": "Basic RakNet implementation written in Javascript",
   "main": "listener.js",
   "scripts": {
