@@ -127,15 +127,6 @@ class Connection {
             }
         }
 
-        if (this.#needACK.length > 0) {
-            for (let [identifierACK, indexes] of this.#needACK) {
-                if (indexes.length === 0) {
-                    this.#needACK.delete(identifierACK)
-                    // Notify ACK ?!? Maybe i need to send a event with ACK and session
-                }
-            }
-        }
-
         for (let [seq, pk] of this.#recoveryQueue) {
             if (pk.sendTime < (Date.now() - 8000)) {
                 this.#packetToSend.push(pk)
@@ -254,12 +245,7 @@ class Connection {
 
         for (let seq of packet.packets) {
             if (this.#recoveryQueue.has(seq)) {
-                for (let pk of this.#recoveryQueue.get(seq).packets) {
-                    if (pk instanceof EncapsulatedPacket && pk.needACK && typeof pk.messageIndex !== 'undefined') {
-                        this.#needACK.delete(pk.identifierACK)
-                    }
-                }
-
+                // Calc ping maybe
                 this.#recoveryQueue.delete(seq)
             }
         }
@@ -274,14 +260,18 @@ class Connection {
             if (this.#recoveryQueue.has(seq)) {
                 let pk = this.#recoveryQueue.get(seq)
                 pk.sequenceNumber = this.#sendSequenceNumber++
-
-                this.#packetToSend.push(pk)
+                pk.sendTime = Date.now()
+                pk.write()
+                this.sendPacket(pk)
 
                 this.#recoveryQueue.delete(seq)
             }
         }
     }
 
+    /**
+     * @param {EncapsulatedPacket} packet 
+     */
     receivePacket(packet) {
         if (typeof packet.messageIndex === 'undefined') {
             // Handle the packet directly if it doesn't have a message index    
@@ -331,11 +321,11 @@ class Connection {
         }
     }
 
+    /**
+     * @param {EncapsulatedPacket} packet 
+     * @param {number} flags 
+     */
     addEncapsulatedToQueue(packet, flags = Priority.Normal) {
-        if ((packet.needACK = (flags & 0b00001000) > 0) === true) {
-            this.#needACK.set(packet.identifierACK, [])
-        }
-
         if (packet.reliability === 2 ||
             packet.reliability === 3 ||
             packet.reliability === 4 ||
@@ -355,7 +345,7 @@ class Connection {
             let buffers = [], i = 0, splitIndex = 0
             while (i < packet.buffer.length) {
                 // Push format: [chunk index: int, chunk: buffer]
-                buffers.push([(splitIndex += 1) - 1, packet.buffer.slice(i, i += this.#mtuSize - 34)])
+                buffers.push([(splitIndex += 1) - 1, packet.buffer.slice(i, i += this.#mtuSize - 60)])
             }
             let splitID = ++this.#splitID % 65536
             for (let [count, buffer] of buffers) {
@@ -390,21 +380,13 @@ class Connection {
      * @param {number} flags 
      */
     addToQueue(pk, flags = Priority.Normal) {
-        let priority = flags & 0b0000111
-        if (pk.needACK && typeof pk.messageIndex !== 'undefined') {
-            this.#needACK.set(pk.identifierACK, pk.messageIndex)
-        }
+        let priority = flags & 0b1
         if (priority === Priority.Immediate) {
             let packet = new DataPacket()
             packet.sequenceNumber = this.#sendSequenceNumber++
-            if (pk.needACK) {
-                packet.packets.push(Object.assign({}, pk))
-                pk.needACK = false
-            } else {
-                packet.packets.push(pk.toBinary())
-            }
+            packet.packets.push(pk.toBinary())
             this.sendPacket(packet)
-            packet.sendTime = Date.now()  // Not implemented
+            packet.sendTime = Date.now()  
             this.#recoveryQueue.set(packet.sequenceNumber, packet)
 
             return
@@ -414,12 +396,7 @@ class Connection {
             this.sendQueue()
         }
 
-        if (pk.needACK) {
-            this.#sendQueue.packets.push(Object.assign({}, pk))
-            pk.needACK = false
-        } else {
-            this.#sendQueue.packets.push(pk.toBinary())
-        }
+        this.#sendQueue.packets.push(pk.toBinary())
     }
 
     /**

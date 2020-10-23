@@ -1,7 +1,6 @@
 const Packet = require('./packet')
 const EncapsulatedPacket = require('./encapsulated_packet')
 const BitFlags = require('./bitflags')
-const BinaryStream = require('@jsprismarine/jsbinaryutils').default
 
 'use strict'
 

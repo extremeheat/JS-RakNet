@@ -49,16 +49,15 @@ class AcknowledgePacket extends Packet {
         // we keep them in a temporary stream that will be appended later on
         let stream = new BinaryStream()
         // Sort packets to ensure a correct encoding
-        this.packets.sort((a, b) => {
-            this.packets[a] < this.packets[b]
-        })
+        this.packets.sort((a, b) => { a > b })
+        let count = this.packets.length
 
-        if (this.packets.length > 0) {
+        if (count > 0) {
             let pointer = 1
             let start = this.packets[0]
             let last = this.packets[0]
 
-            while (pointer < this.packets.length) {
+            while (pointer < count) {
                 let current = this.packets[pointer++]
                 let diff = current - last
                 if (diff === 1) {
@@ -90,7 +89,7 @@ class AcknowledgePacket extends Packet {
         }
 
         this.writeShort(records)
-        this.append(stream.buffer)
+        this.append(stream.getBuffer())
     }
 
 }

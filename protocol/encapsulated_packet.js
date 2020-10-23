@@ -7,22 +7,22 @@ const BinaryStream = require('@jsprismarine/jsbinaryutils').default
 class EncapsulatedPacket {
 
     // Decoded Encapsulated content
-    #buffer
+    buffer
 
     // Encapsulation decoded fields
-    #reliability
+    reliability
 
-    #messageIndex
-    #sequenceIndex
-    #orderIndex
-    #orderChannel
+    messageIndex
+    sequenceIndex
+    orderIndex
+    orderChannel
     
-    #split
+    split
     // If packet is not splitted all those
     // fields remains undefined
-    #splitCount
-    #splitIndex
-    #splitID
+    splitCount
+    splitIndex
+    splitID
 
     needACK = false
     identifierACK
@@ -101,86 +101,6 @@ class EncapsulatedPacket {
         (typeof this.messageIndex !== 'undefined' ? 3 : 0) + 
         (typeof this.orderIndex !== 'undefined' ? 4 : 0) + 
         (this.split ? 10 : 0)
-    }
-
-    get buffer() {
-        return this.#buffer
-    }
-
-    set buffer(buffer) {
-        return this.#buffer = buffer
-    }
-
-    get reliability() {
-        return this.#reliability
-    }
-
-    set reliability(reliability) {
-        this.#reliability = reliability
-    } 
-
-    get messageIndex() {
-        return this.#messageIndex
-    }
-
-    set messageIndex(messageIndex) {
-        this.#messageIndex = messageIndex
-    }
-
-    get sequenceIndex() {
-        return this.#sequenceIndex
-    }
-
-    set sequenceIndex(sequenceIndex) {
-        this.sequenceIndex = sequenceIndex
-    }
-
-    get orderIndex()  {
-        return this.#orderIndex
-    }
-
-    set orderIndex(orderIndex) {
-        this.#orderIndex = orderIndex
-    }
-
-    get orderChannel() {
-        return this.#orderChannel
-    }
-
-    set orderChannel(orderChannel) {
-        this.#orderChannel = orderChannel
-    }
-
-    get split() {
-        return this.#split
-    }
-
-    set split(split) {
-        this.#split = split
-    }
-
-    get splitCount() {
-        return this.#splitCount
-    }
-
-    set splitCount(splitCount) {
-        this.#splitCount = splitCount
-    }
-
-    get splitIndex() {
-        return this.#splitIndex
-    }
-
-    set splitIndex(splitIndex) {
-        this.#splitIndex = splitIndex
-    }
-
-    get splitID() {
-        return this.#splitID
-    }
-
-    set splitID(splitID) {
-        this.#splitID = splitID
     }
 }
 module.exports = EncapsulatedPacket
