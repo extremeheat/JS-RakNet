@@ -512,7 +512,7 @@ class Connection {
         if (this.#sendQueue.packets.length > 0) {
             this.#sendQueue.sequenceNumber = this.#sendSequenceNumber++
             this.sendPacket(this.#sendQueue)
-            this.#sendQueue.sendTime = Date.now()  // Not implemented yet
+            this.#sendQueue.sendTime = Date.now()  
             this.#recoveryQueue.set(this.#sendQueue.sequenceNumber, this.#sendQueue)
             this.#sendQueue = new DataPacket()
         }

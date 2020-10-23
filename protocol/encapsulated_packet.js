@@ -66,30 +66,30 @@ class EncapsulatedPacket {
 
     toBinary() {
         let stream = new BinaryStream()
-        let header = this.#reliability << 5
-        if (this.#split) {
+        let header = this.reliability << 5
+        if (this.split) {
             header |= BitFlags.Split
         }
         stream.writeByte(header)
-        stream.writeShort(this.#buffer.length << 3)
+        stream.writeShort(this.buffer.length << 3)
 
-        if (Reliability.reliable(this.#reliability)) {
+        if (Reliability.reliable(this.reliability)) {
             stream.writeLTriad(this.messageIndex)
         }
 
-        if (Reliability.sequenced(this.#reliability)) {
-            stream.writeLTriad(this.#sequenceIndex)
+        if (Reliability.sequenced(this.reliability)) {
+            stream.writeLTriad(this.sequenceIndex)
         }
 
-        if (Reliability.sequencedOrOrdered(this.#reliability)) {
-            stream.writeLTriad(this.#orderIndex)
-            stream.writeByte(this.#orderChannel)
+        if (Reliability.sequencedOrOrdered(this.reliability)) {
+            stream.writeLTriad(this.orderIndex)
+            stream.writeByte(this.orderChannel)
         }
 
         if (this.#split) {
-            stream.writeInt(this.#splitCount)
-            stream.writeShort(this.#splitID)
-            stream.writeInt(this.#splitIndex)
+            stream.writeInt(this.splitCount)
+            stream.writeShort(this.splitID)
+            stream.writeInt(this.splitIndex)
         }
 
         stream.append(this.buffer)
