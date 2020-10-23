@@ -86,7 +86,7 @@ class EncapsulatedPacket {
             stream.writeByte(this.orderChannel)
         }
 
-        if (this.#split) {
+        if (this.split) {
             stream.writeInt(this.splitCount)
             stream.writeShort(this.splitID)
             stream.writeInt(this.splitIndex)
