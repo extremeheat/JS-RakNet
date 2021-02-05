@@ -86,6 +86,7 @@ class Connection {
 
     update(timestamp) {
         if (!this.#isActive && (this.#lastUpdate + 10000) < timestamp) {
+            // console.log(this.#lastUpdate, timestamp, this.#lastUpdate + 10000, (this.#lastUpdate + 10000) - timestamp)
             this.disconnect('timeout')
             return
         } 
@@ -158,6 +159,7 @@ class Connection {
     receive(buffer) {
         this.#isActive = true
         this.#lastUpdate = Date.now()
+        // console.log("Last update", this.#lastUpdate, this.#listener)
         let header = buffer.readUInt8()
         
         if ((header & BitFlags.Valid) == 0) {
@@ -273,6 +275,7 @@ class Connection {
      * @param {EncapsulatedPacket} packet 
      */
     receivePacket(packet) {
+        // console.log('[con] ->',packet)
         if (typeof packet.messageIndex === 'undefined') {
             // Handle the packet directly if it doesn't have a message index    
             this.handlePacket(packet)        
@@ -415,6 +418,7 @@ class Connection {
 
         if (id < 0x80) {
             if (this.#state === Status.Connecting) {
+                // console.log('----------- conn packet', id)
                 if (id === Identifiers.ConnectionRequest) {
                     this.handleConnectionRequest(packet.buffer).then(encapsulated => {
                         this.addToQueue(encapsulated, Priority.Immediate)
@@ -429,13 +433,22 @@ class Connection {
                         this.#state = Status.Connected
                         this.#listener.emit('openConnection', this)
                     } 
-                } 
+                } else if (id == Identifiers.ConnectionRequestAccepted) {
+                    this.handleConnectionRequestAccepted(packet.buffer).then(encapsulated => {
+                        this.addToQueue(encapsulated, Priority.Immediate)
+                        this.#state = Status.Connected
+                        console.log('Connected!')
+                        this.#listener.emit('connected', this)
+                    })
+                }
             } else if (id === Identifiers.DisconnectNotification) {
                 this.disconnect('client disconnect')
             } else if (id === Identifiers.ConnectedPing) {
                 this.handleConnectedPing(packet.buffer).then(encapsulated => {
                     this.addToQueue(encapsulated)
                 })
+            } else if (id === Identifiers.ConnectedPong) {
+                this.handleConnectedPong(packet.buffer)
             }
         } else if (this.#state === Status.Connected) {
             this.#listener.emit('encapsulated', packet, this.#address)  // To fit in software needs later
@@ -443,6 +456,28 @@ class Connection {
     }
 
     // Async encapsulated handlers
+
+    async handleConnectionRequestAccepted(buffer) {
+        let dataPacket = new ConnectionRequestAccepted()
+        dataPacket.buffer = buffer
+        dataPacket.read()
+
+        const pk = new NewIncomingConnection()
+        pk.address = this.#listener.address
+        pk.systemAddresses = []
+        for (let i = 0; i < 20; i++) {
+            pk.systemAddresses.push(this.#listener.address)
+        }
+        pk.requestTimestamp = dataPacket.requestTimestamp
+        pk.acceptedTimestamp = dataPacket.accpetedTimestamp
+        pk.write()
+        
+        let sendPacket = new EncapsulatedPacket()
+        sendPacket.reliability = 0
+        sendPacket.buffer = pk.buffer
+
+        return sendPacket
+    }
 
     async handleConnectionRequest(buffer) {
         let dataPacket = new ConnectionRequest()
@@ -477,7 +512,42 @@ class Connection {
         sendPacket.buffer = pk.buffer
 
         return sendPacket
-    } 
+    }
+
+    sendConnectedPing() {
+        const pk = new ConnectedPing()
+        pk.clientTimestamp = BigInt(Date.now())
+        pk.write()
+
+        let sendPacket = new EncapsulatedPacket()
+        sendPacket.reliability = 0
+        sendPacket.buffer = pk.buffer
+
+        this.addToQueue(sendPacket, 1)
+        // console.log('Queued ping')
+    }
+
+    handleConnectedPong(buffer) {
+        const pk = new ConnectedPong()
+        pk.buffer = buffer
+        pk.read()
+
+        this.#listener.lastPong = pk.serverTimestamp
+    }
+
+    sendConnectionRequest(clientGUID, mtuSize) {
+        const packet = new ConnectionRequest()
+        packet.mtuSize = mtuSize
+        packet.clientGUID = clientGUID
+        packet.requestTimestamp = BigInt(Date.now())
+        packet.write()
+
+        let sendPacket = new EncapsulatedPacket()
+        sendPacket.reliability = 0
+        sendPacket.buffer = packet.buffer
+
+        this.addToQueue(sendPacket)
+    }
 
     /**
      * Handles a splitted packet.
@@ -524,6 +594,7 @@ class Connection {
     }
 
     close() {
+        // console.trace('[conn] Closing!')
         let stream = new BinaryStream(Buffer.from('\x00\x00\x08\x15', 'binary'))
         this.addEncapsulatedToQueue(EncapsulatedPacket.fromBinary(stream), Priority.Immediate)  // Client discconect packet 0x15
     }

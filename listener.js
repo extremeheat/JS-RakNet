@@ -1,7 +1,7 @@
 const Dgram = require('dgram')
 const Crypto = require('crypto')
 const EventEmitter  = require('events')
-
+const debug = require('debug')('raknet')
 const Connection = require('./connection')
 const ServerName = require('./utils/server_name')
 const InetAddress = require('./utils/inet_address')
@@ -48,6 +48,7 @@ class Listener extends EventEmitter {
         this.#name.setServerId(this.#id)
 
         this.#socket.on('message', (buffer, rinfo) => {
+            debug('[C->S]', buffer, rinfo)
             this.handle(buffer, rinfo)
         })
 
@@ -224,6 +225,7 @@ class Listener extends EventEmitter {
      * @param {number} port 
      */
     sendBuffer(buffer, address, port) {
+        debug('[S->C] ', buffer, address, port)
         this.#socket.send(buffer, 0, buffer.length, port, address)
     }
 

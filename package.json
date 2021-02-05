@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/JSPrismarine/RakNet#readme",
   "dependencies": {
-    "@jsprismarine/jsbinaryutils": "2.1.4"
+    "@jsprismarine/jsbinaryutils": "2.1.4",
+    "debug": "^4.3.1"
   }
 }
