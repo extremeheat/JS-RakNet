@@ -130,7 +130,8 @@ class Connection {
 
         for (let [seq, pk] of this.#recoveryQueue) {
             if (pk.sendTime < (Date.now() - 8000)) {
-                this.#packetToSend.push(pk)
+                // HACK: disable this to make MiNet happy
+                //this.#packetToSend.push(pk)
                 this.#recoveryQueue.delete(seq)
             }
         }
