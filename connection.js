@@ -3,6 +3,7 @@ const InetAddress = require('./utils/inet_address')
 const DataPacket = require('./protocol/data_packet')
 const NACK = require('./protocol/nack')
 const ACK = require('./protocol/ack')
+const debug = require('debug')('raknet')
 const Identifiers = require('./protocol/identifiers')
 const ConnectionRequest = require('./protocol/connection_request')
 const ConnectionRequestAccepted = require('./protocol/connection_request_accepted')
@@ -86,7 +87,7 @@ class Connection {
 
     update(timestamp) {
         if (!this.#isActive && (this.#lastUpdate + 10000) < timestamp) {
-            // console.log(this.#lastUpdate, timestamp, this.#lastUpdate + 10000, (this.#lastUpdate + 10000) - timestamp)
+            // console.debug(this.#lastUpdate, timestamp, this.#lastUpdate + 10000, (this.#lastUpdate + 10000) - timestamp)
             this.disconnect('timeout')
             return
         } 
@@ -96,6 +97,7 @@ class Connection {
         if (this.#ackQueue.length > 0) {
             let pk = new ACK()
             pk.packets = this.#ackQueue
+            pk.write()
             this.sendPacket(pk)
             this.#ackQueue = []
         }
@@ -103,20 +105,21 @@ class Connection {
         if (this.#nackQueue.length > 0) {
             let pk = new NACK()
             pk.packets = this.#nackQueue
+            pk.write()
             this.sendPacket(pk)
             this.#nackQueue = []
         }
 
         if (this.#packetToSend.length > 0) {
             let limit = 16
-            for (let pk of this.#packetToSend) {          
+            for (let pk of this.#packetToSend) {
                 pk.sendTime = timestamp  // To implement
                 pk.write()
                 this.#recoveryQueue.set(pk.sequenceNumber, pk)
                 let index = this.#packetToSend.indexOf(pk)
                 this.#packetToSend.splice(index, 1)
                 this.sendPacket(pk)
-
+                debug('[raknet] Sent lost packet', pk.sequenceNumber)
                 if (--limit <= 0) {
                     break
                 }
@@ -130,6 +133,7 @@ class Connection {
 
         for (let [seq, pk] of this.#recoveryQueue) {
             if (pk.sendTime < (Date.now() - 8000)) {
+                console.debug('[raknet] would resend lost', seq)
                 // HACK: disable this to make MiNet happy
                 //this.#packetToSend.push(pk)
                 this.#recoveryQueue.delete(seq)
@@ -160,7 +164,7 @@ class Connection {
     receive(buffer) {
         this.#isActive = true
         this.#lastUpdate = Date.now()
-        // console.log("Last update", this.#lastUpdate, this.#listener)
+        // console.debug("Last update", this.#lastUpdate, this.#listener)
         let header = buffer.readUInt8()
         
         if ((header & BitFlags.Valid) == 0) {
@@ -212,6 +216,7 @@ class Connection {
 
         // Check if the sequence is broken due to a lost packet
         if (diff !== 1) {
+            debug('** Lost a packet: ', dataPacket.sequenceNumber , this.#lastSequenceNumber)
             // As i said before, there we search for missing packets in the list of the recieved ones
             for (let i = this.#lastSequenceNumber + 1; i < dataPacket.sequenceNumber; i++) {
                 // Adding the packet sequence number to the NACK queue and then sending a NACK
@@ -228,7 +233,9 @@ class Connection {
             this.#lastSequenceNumber = dataPacket.sequenceNumber
             this.#windowStart += diff
             this.#windowEnd += diff
-        } 
+        }
+
+        // debug('--- SEQ #', dataPacket.sequenceNumber)
 
         // Handle encapsulated
         // This is an array but soon 
@@ -257,14 +264,16 @@ class Connection {
     handleNACK(buffer) {
         let packet = new NACK()
         packet.buffer = buffer
+        // debug('[raknet] -> NACK', buffer)
         packet.read()
+
+        this.totalNacks += packet.packets.length
 
         for (let seq of packet.packets) {
             if (this.#recoveryQueue.has(seq)) {
                 let pk = this.#recoveryQueue.get(seq)
-                pk.sequenceNumber = this.#sendSequenceNumber++
                 pk.sendTime = Date.now()
-                pk.write()
+                debug('[raknet] resending NACK', pk.sequenceNumber, pk.buffer.toString('hex'))
                 this.sendPacket(pk)
 
                 this.#recoveryQueue.delete(seq)
@@ -276,7 +285,7 @@ class Connection {
      * @param {EncapsulatedPacket} packet 
      */
     receivePacket(packet) {
-        // console.log('[con] ->',packet)
+        // console.debug('[con] ->',packet)
         if (typeof packet.messageIndex === 'undefined') {
             // Handle the packet directly if it doesn't have a message index    
             this.handlePacket(packet)        
@@ -294,6 +303,7 @@ class Connection {
                 this.#lastReliableIndex++
                 this.#reliableWindowStart++
                 this.#reliableWindowEnd++
+                // debug('HANDLING #', packet.messageIndex, packet.buffer.toString('hex'))
                 this.handlePacket(packet)
 
                 if (this.#reliableWindow.size > 0) {
@@ -389,6 +399,7 @@ class Connection {
             let packet = new DataPacket()
             packet.sequenceNumber = this.#sendSequenceNumber++
             packet.packets.push(pk.toBinary())
+            packet.write()
             this.sendPacket(packet)
             packet.sendTime = Date.now()  
             this.#recoveryQueue.set(packet.sequenceNumber, packet)
@@ -417,9 +428,10 @@ class Connection {
         let id = packet.buffer.readUInt8()
         let dataPacket
 
+        // console.debug('[raknet.c] handle packet ', packet.buffer, id, this.#state)
+
         if (id < 0x80) {
             if (this.#state === Status.Connecting) {
-                // console.log('----------- conn packet', id)
                 if (id === Identifiers.ConnectionRequest) {
                     this.handleConnectionRequest(packet.buffer).then(encapsulated => {
                         this.addToQueue(encapsulated, Priority.Immediate)
@@ -433,12 +445,12 @@ class Connection {
                     if (dataPacket.address.port === serverPort) {
                         this.#state = Status.Connected
                         this.#listener.emit('openConnection', this)
-                    } 
+                    }
                 } else if (id == Identifiers.ConnectionRequestAccepted) {
                     this.handleConnectionRequestAccepted(packet.buffer).then(encapsulated => {
                         this.addToQueue(encapsulated, Priority.Immediate)
                         this.#state = Status.Connected
-                        console.log('Connected!')
+                        debug('Connected!')
                         this.#listener.emit('connected', this)
                     })
                 }
@@ -450,6 +462,8 @@ class Connection {
                 })
             } else if (id === Identifiers.ConnectedPong) {
                 this.handleConnectedPong(packet.buffer)
+            } else if (this.#state == Status.Connected) {
+                debug('Unknown packet while connected ' + packet.toString())
             }
         } else if (this.#state === Status.Connected) {
             this.#listener.emit('encapsulated', packet, this.#address)  // To fit in software needs later
@@ -459,6 +473,7 @@ class Connection {
     // Async encapsulated handlers
 
     async handleConnectionRequestAccepted(buffer) {
+        debug('CONNECTION ACCEPTED')
         let dataPacket = new ConnectionRequestAccepted()
         dataPacket.buffer = buffer
         dataPacket.read()
@@ -525,7 +540,7 @@ class Connection {
         sendPacket.buffer = pk.buffer
 
         this.addToQueue(sendPacket, 1)
-        // console.log('Queued ping')
+        // console.debug('Queued ping')
     }
 
     handleConnectedPong(buffer) {
@@ -533,7 +548,7 @@ class Connection {
         pk.buffer = buffer
         pk.read()
 
-        this.#listener.lastPong = pk.serverTimestamp
+        this.#listener.lastPong = BigInt(pk.serverTimestamp || Date.now())
     }
 
     sendConnectionRequest(clientGUID, mtuSize) {
@@ -547,7 +562,8 @@ class Connection {
         sendPacket.reliability = 0
         sendPacket.buffer = packet.buffer
 
-        this.addToQueue(sendPacket)
+        this.addToQueue(sendPacket, 1)
+        debug('Sending connection request')
     }
 
     /**
@@ -582,6 +598,7 @@ class Connection {
     sendQueue() {
         if (this.#sendQueue.packets.length > 0) {
             this.#sendQueue.sequenceNumber = this.#sendSequenceNumber++
+            this.#sendQueue.write()
             this.sendPacket(this.#sendQueue)
             this.#sendQueue.sendTime = Date.now()  
             this.#recoveryQueue.set(this.#sendQueue.sequenceNumber, this.#sendQueue)
@@ -590,7 +607,6 @@ class Connection {
     }
 
     sendPacket(packet) {
-        packet.write()
         this.#listener.sendBuffer(packet.buffer, this.#address.address, this.#address.port)
     }
 

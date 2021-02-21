@@ -58,7 +58,7 @@ class EncapsulatedPacket {
             packet.splitIndex = stream.readInt()
         }
 
-        packet.buffer = stream.buffer.slice(stream.offset)
+        packet.buffer = stream.buffer.slice(stream.offset, stream.offset + length)
         stream.offset += length
 
         return packet

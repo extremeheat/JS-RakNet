@@ -13,7 +13,9 @@ const Identifiers = {
     OpenConnectionReply2: 0x08,
     ConnectionRequest: 0x09,
     ConnectionRequestAccepted: 0x10,
+    ConnectionAttemptFailed: 0x11,
     NewIncomingConnection: 0x13,
+    NoFreeIncomingConnections: 0x14,
     DisconnectNotification: 0x15,
     IncompatibleProtocolVersion: 0x19,
 

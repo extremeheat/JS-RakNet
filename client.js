@@ -17,10 +17,11 @@ const OpenConnectionReply2 = require('./protocol/open_connection_reply_2')
 const PROTOCOL = 10
 
 // Raknet ticks
-const RAKNET_TPS = 40
+const RAKNET_TPS = 100
 const RAKNET_TICK_LENGTH = 1 / RAKNET_TPS
 
-const MTU_SIZE = 1492
+// Constantly reconnect with smaller MTU
+const START_MTU_SIZE = 1492
 
 // Listen to packets and then process them
 class Client extends EventEmitter {
@@ -34,14 +35,16 @@ class Client extends EventEmitter {
     connection
     /** @type {boolean} */
     shutdown = false
-
-    lastPong = Date.now()
+    lastPong = BigInt(Date.now())
 
     constructor(hostname, port) {
         super()
         this.hostname = hostname
         this.port = port
         this.address = new InetAddress(hostname, port)
+        this.state = 'waiting'
+        this.mtuSize = START_MTU_SIZE
+        this.id = -7472034367240126457n
     }
 
     /**
@@ -68,7 +71,14 @@ class Client extends EventEmitter {
             })
         })
 
-        this.sendConnectionRequest()
+        const MAX_CONNECTION_TRIES = 5
+        for (let i = 0; i < MAX_CONNECTION_TRIES; i++) {
+            debug('Connecting with mtu', this.mtuSize)
+            this.sendConnectionRequest()
+            await sleep(1500)
+            if (this.state != 'waiting') break
+            this.mtuSize -= 100
+        }
 
         this.tick()  // tick sessions
         return this
@@ -78,15 +88,17 @@ class Client extends EventEmitter {
         let header = buffer.readUInt8()  // Read packet header to recognize packet type
 
         let token = `${rinfo.address}:${rinfo.port}`
-        if (this.connection) {
+        // debug('[raknet] Hadling packet', buffer, this.connection)
+        if (this.connection && buffer[0] > 0x20) {
             this.connection.receive(buffer)
         } else {
-            // console.log('Header', header.toString(16))
+            // debug('Header', header.toString(16))
             switch(header) {
                 case Identifiers.UnconnectedPing:
                     this.handleUnconnectedPing(buffer).then(buffer => {
                         this.socket.send(buffer, 0, buffer.length, rinfo.port, rinfo.address)
                     })
+                    break
                 case Identifiers.UnconnectedPong:
                     this.handleUnconnectedPong(buffer)
                     break
@@ -98,6 +110,15 @@ class Client extends EventEmitter {
                 case Identifiers.OpenConnectionReply2:
                     this.handleOpenConnectionReply2(buffer)
                     break
+                case Identifiers.NoFreeIncomingConnections:
+                    debug('[raknet] Server rejected connection - full?')
+                    this.emit('error', 'Server is full')
+                    break
+                case Identifiers.ConnectionAttemptFailed:
+                    debug('[raknet] Connection was rejected by server')
+                    this.emit('error', 'Connection request rejected')
+                    break
+                default:
             } 
         }
     }
@@ -105,9 +126,9 @@ class Client extends EventEmitter {
     // async handlers
 
     sendConnectionRequest() {
-        // console.log('CONNECTING')
+        debug('[raknet] sending connection req')
         const packet = new OpenConnectionRequest1()
-        packet.mtuSize = MTU_SIZE
+        packet.mtuSize = this.mtuSize
         packet.protocol = PROTOCOL
         packet.write()
         this.sendBuffer(packet.buffer)
@@ -115,22 +136,25 @@ class Client extends EventEmitter {
     }
 
     handleUnconnectedPong(buffer) {
+        debug('[raknet] got unconnected pong')
         const decodedPacket = new UnconnectedPong()
         decodedPacket.buffer = buffer
         decodedPacket.read()
-        this.lastPong = decodedPacket.sendTimestamp
+        this.lastPong = BigInt(decodedPacket.sendTimestamp)
         this.emit('unconnectedPong', this.lastPong)
     }
 
     sendUnconnectedPing() {
         const packet = new UnconnectedPing()
-        packet.sendTimeStamp = Date.now()
+        packet.sendTimeStamp = BigInt(Date.now())
         packet.clientGUID = this.id
         packet.write()
         this.sendBuffer(packet.buffer)
     }
 
     async handleOpenConnectionReply1(buffer) {
+        debug('[raknet] Got OpenConnectionReply1')
+        this.state = 'connecting'
         const decodedPacket = new OpenConnectionReply1()
         decodedPacket.buffer = buffer
         decodedPacket.read()
@@ -139,17 +163,17 @@ class Client extends EventEmitter {
         packet.mtuSize = decodedPacket.mtuSize
         packet.clientGUID = this.id
         packet.serverAddress = this.address
+        // debug('MTU', decodedPacket, packet.mtuSize, packet.clientGUID, packet.serverAddress.address)
         packet.write()
 
         return packet.buffer
     }
 
     async handleOpenConnectionReply2(buffer) {
-        // console.log('[client] conn reply 2')
+        debug('[client] Got conn reply 2')
         const decodedPacket = new OpenConnectionReply2()
         decodedPacket.buffer = buffer
         decodedPacket.read()
-        // console.log(decodedPacket)
 
         this.connection = new Connection(this, decodedPacket.mtuSize, this.address)
         this.connection.sendConnectionRequest(this.id, decodedPacket.mtuSize)
@@ -162,14 +186,14 @@ class Client extends EventEmitter {
             if (!this.shutdown) {
                 this.connection?.update(Date.now())
                 if (ticks % 100 == 0) { // TODO: How long do we wait before sending? about 1s for now
-                    // console.log('PINGING')
+                    // debug('PINGING')
                     this.connection ? this.connection.sendConnectedPing() : this.sendUnconnectedPing()
 
-                    let td = Date.now() - this.lastPong
+                    let td = BigInt(Date.now()) - this.lastPong
                     if (td > 4000) { // 4s timeout
-                        // console.log(td, this.lastPong)
-                        this.close('timeout')
-                        this.shutdown = true
+                        debug(td, this.lastPong)
+                        // this.close('timeout')
+                        // this.shutdown = true
                     }
                 }
             } else {
@@ -186,7 +210,8 @@ class Client extends EventEmitter {
     close(reason) {
         this.connection?.close()
         this.connection = null
-        // console.log('[client] closing:', reason)
+        this.shutdown = true
+        debug('[client] closing', reason)
         this.emit('closeConnection', reason)
     }
 
@@ -206,4 +231,13 @@ class Client extends EventEmitter {
         debug('[C->S]', buffer)
     }
 }
+
+async function sleep(ms) {
+    return new Promise(res => {
+        setTimeout(() => {
+            res()
+        }, ms)
+    })
+}
+
 module.exports = Client
