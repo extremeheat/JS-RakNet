@@ -1,3 +1,4 @@
+import BinaryStream from '@jsprismarine/jsbinaryutils';
 import Packet from './Packet';
 
 // const MAX_ACK_PACKETS = 4096;
@@ -7,6 +8,7 @@ export default class AcknowledgePacket extends Packet {
   packets: number[] = [];
 
   public decode(): void {
+    // console.warn('Decoding ACK', this.buffer)
     super.decode()
     // Clear old cached decoded packets
     this.packets = [];
@@ -30,27 +32,55 @@ export default class AcknowledgePacket extends Packet {
 
   public encode(): void {
     super.encode()
-    const seqNumbersCount = this.packets.length;
-    // Record count (a range has start and end values, so count 2 values)
-    this.writeShort(seqNumbersCount > 1 ? seqNumbersCount / 2 : 1);
-    // Sort in ascending order
     this.packets.sort((a, b) => a - b);
 
-    if (seqNumbersCount > 1) {
-      // True if is a single record
-      this.writeBool(false);
-      // We always have 2 sequence numbers max, so this may be a hack
-      for (let i = 0; i < seqNumbersCount / 2; i += 2) {
-        // Write start sequence number
-        this.writeLTriad(this.packets[i]);
-        // Write end sequence number
-        this.writeLTriad(this.packets[i + 1]);
+    let records = 0
+    // We have to create a stream because the encoding is records + buffer
+    // but we need to send records first and to compute them we have to decode the packet
+    // and as we need to write first of all records, we cannot write decoded data so
+    // we keep them in a temporary stream that will be appended later on
+    let stream = new BinaryStream()
+    // Sort packets to ensure a correct encoding
+    let count = this.packets.length
+
+    if (count > 0) {
+      let pointer = 1
+      let start = this.packets[0]
+      let last = this.packets[0]
+
+      while (pointer < count) {
+        let current = this.packets[pointer++]
+        let diff = current - last
+        if (diff === 1) {
+          last = current
+        } else if (diff > 1) {
+          if (start === last) {
+            stream.writeByte(1)
+            stream.writeLTriad(start)
+            start = last = current
+          } else {
+            stream.writeByte(0)
+            stream.writeLTriad(start)
+            stream.writeLTriad(last)
+            start = last = current
+          }
+          records++
+        }
       }
-    } else {
-      // True if is a single record
-      this.writeBool(true);
-      // Write the only value we have
-      this.writeLTriad(this.packets[0]);
+
+      if (start === last) {
+        stream.writeByte(1)
+        stream.writeLTriad(start)
+      } else {
+        stream.writeByte(0)
+        stream.writeLTriad(start)
+        stream.writeLTriad(last)
+      }
+      records++
     }
+
+    this.writeShort(records)
+    this.append(stream.getBuffer())
+
   }
 }

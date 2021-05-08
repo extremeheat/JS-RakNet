@@ -9,7 +9,7 @@ export default class NewIncomingConnection extends Packet {
   }
 
   address: InetAddress
-  systemAddresses = []
+  systemAddresses: InetAddress[] = []
 
   requestTimestamp
   acceptedTimestamp

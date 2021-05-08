@@ -1,4 +1,5 @@
 import BinaryStream from "@jsprismarine/jsbinaryutils";
+import { Client } from "./Client";
 import ACK from "./protocol/ACK";
 import BitFlags from "./protocol/bitflags";
 import ConnectedPing from "./protocol/ConnectedPing";
@@ -11,8 +12,10 @@ import Identifiers from "./protocol/Identifiers";
 import NACK from "./protocol/NACK";
 import NewIncomingConnection from "./protocol/NewIncomingConnection";
 import Reliability from "./protocol/reliability";
+import { Server } from "./Server";
 import InetAddress from "./utils/InetAddress";
 const { SlidingReceiveWindow, SlidingOrderedWindow } = require('./SlidingWindow')
+const debug = require('debug')('raknet')
 
 enum Priority {
   Normal,
@@ -30,6 +33,7 @@ export class Connection {
 
   nackQueue = new Set<number>()
   ackQueue: number[] = []
+  nacking = new Set<number>()
 
   nextDatagram = new DataPacket()
 
@@ -38,8 +42,8 @@ export class Connection {
   splitPackets = new Map<number, Map<number, EncapsulatedPacket>>()
   recoveryList = new Map<number, DataPacket>()
 
-  receiveWindow = new SlidingReceiveWindow(128)
-  reliableReceiveWindow = new SlidingOrderedWindow(128)
+  receiveWindow = new SlidingReceiveWindow(256)
+  reliableReceiveWindow = new SlidingOrderedWindow(256)
   // TODO: ReliableOrdered channels
   channelIndex = []
 
@@ -50,7 +54,7 @@ export class Connection {
   sendSplitID = 0
 
   running = true
-  listener
+  listener: Client | Server
 
   inLog; outLog;
 
@@ -59,8 +63,8 @@ export class Connection {
     this.mtuSize = mtuSize
     this.address = address
 
-    this.inLog = (...args) => console.debug('-> ', ...args)
-    this.outLog = (...args) => console.debug('<- ', ...args)
+    this.inLog = (...args) => debug('-> ', ...args)
+    this.outLog = (...args) => debug('<- ', ...args)
 
     for (let i = 0; i < 32; i++) {
       this.channelIndex[i] = 0
@@ -72,10 +76,24 @@ export class Connection {
    * @param timestamp current tick time
    */
   update(timestamp: number) {
-    if (this.running && (this.lastUpdate + 10000) < timestamp) {
+    if (this.running && (this.lastUpdate + 10000) < timestamp && !globalThis.debuggingRaknet) {
       this.disconnect('timeout')
       return
     }
+
+    if (this.recvQueue.length) {
+      const messages = this.recvQueue.splice(0, 4)
+      for (const message of messages) {
+        this.receiveOnline(message)
+      }
+    }
+
+    // if (this.sendQ.length) {
+    //   const messages = this.sendQ.splice(0, 1)
+    //   for (const message of messages) {
+    //     this.sendPacket(message)
+    //   }
+    // }
 
     // Send ACKs
     if (this.ackQueue.length > 0) {
@@ -89,9 +107,14 @@ export class Connection {
     // Send NACKs
     if (this.nackQueue.size) {
       const pk = new NACK()
-      pk.packets = [...this.nackQueue],
-        pk.encode()
+      pk.packets = [...this.nackQueue]
+      pk.encode()
       this.outLog('Sending NACK batch', this.nackQueue)
+      this.sendPacket(pk)
+      
+      for (const nak of this.nackQueue) {
+        this.nacking.add(nak)
+      }
       this.nackQueue.clear()
     }
 
@@ -103,6 +126,10 @@ export class Connection {
 
   disconnect(reason = 'unknown') {
 
+  }
+
+  recieve(buffer: Buffer) {
+    this.recvQueue.push(buffer)
   }
 
   /**
@@ -139,17 +166,19 @@ export class Connection {
   handleNACK(buffer) {
     let packet = new NACK()
     packet.buffer = buffer
-    // debug('[raknet] -> NACK', buffer)
     packet.decode()
-
+    this.inLog('[raknet] -> NACK', packet.packets)
     for (let seq of packet.packets) {
       if (this.recoveryList.has(seq)) {
         let pk = this.recoveryList.get(seq)
         // pk.sendTime = Date.now()
-        this.outLog('[raknet] resending NACK', pk.sequenceNumber)
-        this.sendPacket(pk)
-
+        this.outLog('[raknet] resending NACK', pk)
+        // this.sendPacket(pk)
+        this.listener.sendBuffer(pk.buffer, this.address)
+        this.outLog('[raknet] sent', pk)
         this.recoveryList.delete(seq)
+      } else {
+        this.inLog('** LOST PACKET', seq)
       }
     }
   }
@@ -157,21 +186,22 @@ export class Connection {
   handleDatagram(buffer) {
     const dataPacket = DataPacket.from(buffer)
     console.assert(dataPacket.sequenceNumber != null, 'Packet sequence number cannot be null')
-    // console.log('Reading datagram', buffer, dataPacket)
+    // this.inLog('Reading datagram', buffer, dataPacket)
 
     this.ackQueue.push(dataPacket.sequenceNumber)
 
     this.receiveWindow.set(dataPacket.sequenceNumber, dataPacket)
 
     const [missing, have] = this.receiveWindow.read() as [number[], DataPacket[]]
-    console.log('Reading', missing, have)
+    // this.inLog('Reading', missing, have)
     for (const miss of missing) {
-      this.nackQueue.add(miss)
+      if (!this.nacking.has(miss)) this.nackQueue.add(miss)
     }
-    if (this.nackQueue.size) this.inLog('NACKs while reading datagram', this.nackQueue)
+    if (this.nackQueue.size) this.inLog('NACKs while reading datagram', this.nackQueue, this.nacking)
     for (const datagram of have) {
-      if (this.nackQueue.has(datagram.sequenceNumber)) {
+      if (this.nacking.has(datagram.sequenceNumber) || this.nackQueue.has(datagram.sequenceNumber)) {
         this.inLog('Recieved lost #', datagram.sequenceNumber)
+        this.nacking.delete(datagram.sequenceNumber)
         this.nackQueue.delete(datagram.sequenceNumber)
       }
 
@@ -182,11 +212,11 @@ export class Connection {
   }
 
   recievePacket(packet: EncapsulatedPacket) {
-    this.inLog('-> Encapsulated', packet)
+    // this.inLog('-> Encapsulated', packet, packet.isReliable())
     if (packet.isReliable()) {
       this.reliableReceiveWindow.set(packet.messageIndex, packet)
 
-      const readable = this.reliableReceiveWindow.read((lost) => console.log('!! LOST', lost))
+      const readable = this.reliableReceiveWindow.read((lost) => debug('Lost ordered', lost))
       this.inLog('Reading reliable', readable)
       for (const pak of readable) {
         this.handlePacket(pak)
@@ -197,20 +227,26 @@ export class Connection {
   }
 
   handleSplit(packet: EncapsulatedPacket) {
-    if (this.splitPackets.has(packet.splitID)) {
-      const splitPacket = this.splitPackets.get(packet.splitID)
-      splitPacket.set(packet.splitIndex, packet)
+    if (!this.splitPackets.has(packet.splitID)) {
+      this.splitPackets.set(packet.splitID, new Map([[packet.splitIndex, packet]]))
+    }
 
-      if (splitPacket.size === packet.splitCount) {
-        const bufs = []
-        for (let i = 0; i < packet.splitCount; i++) {
-          bufs.push(splitPacket.get(i))
-        }
-        const encapsulated = new EncapsulatedPacket()
-        encapsulated.buffer = Buffer.concat(bufs)
+    const splitPacket = this.splitPackets.get(packet.splitID)
+    splitPacket.set(packet.splitIndex, packet)
 
-        this.splitPackets.delete(packet.splitID)
+    if (splitPacket.size === packet.splitCount) {
+      const bufs: Buffer[] = []
+      for (let i = 0; i < packet.splitCount; i++) {
+        bufs.push(splitPacket.get(i).buffer)
       }
+      const encapsulated = new EncapsulatedPacket()
+      encapsulated.buffer = Buffer.concat(bufs)
+
+      this.splitPackets.delete(packet.splitID)
+
+      this.handlePacket(encapsulated)
+    } else {
+      // debug('Waiting for split', packet.messageIndex, packet.splitID, packet.splitIndex, '/' , packet.splitCount)
     }
   }
 
@@ -223,7 +259,7 @@ export class Connection {
 
     const id = packet.buffer.readUInt8()
 
-    // console.log('--- id', id, this.state, Status.Connecting)
+    // this.inLog('--> Encapsulated, h id', id, this.state, Status.Connecting)
 
     if (id < 0x80) {
       if (this.state == Status.Connecting) {
@@ -233,7 +269,8 @@ export class Connection {
         } else if (id === Identifiers.NewIncomingConnection && this.listener.server) {
           const pak = NewIncomingConnection.from(packet.buffer)
 
-          const serverAddress = this.listener.socket.address
+          const serverAddress = this.listener.socket.address()
+          // debug('incoming connection', serverAddress, pak.address)
           if (serverAddress.port === pak.address.port) {
             this.state = Status.Connected
             this.listener.emit('openConnection', this)
@@ -257,7 +294,8 @@ export class Connection {
   }
 
   async handleConnectionRequestAccepted(buffer: Buffer) {
-    this.inLog('CONNECTION ACCEPTED')
+    if (this.listener instanceof Server) return
+    this.inLog('Connection accepted')
     let dataPacket = new ConnectionRequestAccepted()
     dataPacket.buffer = buffer
     dataPacket.decode()
@@ -276,7 +314,7 @@ export class Connection {
     sendPacket.reliability = 0
     sendPacket.buffer = pk.buffer
 
-    return sendPacket
+    this.addToQueue(sendPacket, Priority.Immediate)
   }
 
   async handleConnectionRequest(buffer: Buffer) {
@@ -293,7 +331,7 @@ export class Connection {
     sendPacket.buffer = pk.buffer
 
     this.addToQueue(sendPacket)
-    console.log('SENDING CONN ACCEPT', pk)
+    this.outLog('Sending connection accept', pk)
   }
 
   async handleConnectedPing(buffer: Buffer) {
@@ -326,6 +364,7 @@ export class Connection {
   }
 
   handleConnectedPong(buffer) {
+    if (this.listener instanceof Server) return
     const pk = ConnectedPong.from(buffer)
 
     this.listener.lastPong = BigInt(pk.serverTimestamp || Date.now())
@@ -346,6 +385,12 @@ export class Connection {
     this.outLog('Sending connection request')
   }
 
+  /**
+   * Sends an EncapsulatedPacket with a message index if ordered, and splits
+   * if needed.
+   * @param packet The packet to send
+   * @param flags Whether or not to queue this packet or send now
+   */
   addEncapsulatedToQueue(packet: EncapsulatedPacket, flags = Priority.Normal) {
     if (Reliability.isReliable(packet.reliability)) {
       packet.messageIndex = this.sendMessageIndex++
@@ -381,6 +426,8 @@ export class Connection {
         }
         this.addToQueue(pk, flags | Priority.Immediate)
       }
+    } else {
+      this.addToQueue(packet, flags)
     }
   }
 
@@ -395,10 +442,9 @@ export class Connection {
       this.sendPacket(packet)
       // packet.sendTime = Date.now()  
       this.recoveryList.set(packet.sequenceNumber, packet)
-      console.log('sent now')
+      this.outLog('Sent Q #', packet.sequenceNumber)
       return
     }
-    console.log('qed')
     const length = this.nextDatagram.length()
     if (length + pk.getTotalLength() > this.mtuSize) {
       this.sendQueue()
@@ -411,7 +457,7 @@ export class Connection {
     if (this.nextDatagram.packets.length > 0) {
       this.nextDatagram.sequenceNumber = this.sendSequenceNumber++
       this.nextDatagram.encode()
-      console.log('SENDING Q!')
+      // console.log('SENDING Q!')
       this.sendPacket(this.nextDatagram)
       // this.sendQueue.sendTime = Date.now()
       this.recoveryList.set(this.nextDatagram.sequenceNumber, this.nextDatagram)

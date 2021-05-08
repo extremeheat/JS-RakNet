@@ -12,6 +12,7 @@ import OpenConnectionReply1 from './protocol/OpenConnectionReply1'
 import OpenConnectionReply2 from './protocol/OpenConnectionReply2'
 import UnconnectedPing from './protocol/UnconnectedPing'
 import InetAddress from './utils/InetAddress'
+const debug = require('debug')('raknet')
 
 // RakNet protocol versions 
 const RAKNET_PROTOCOL = 10
@@ -20,6 +21,7 @@ const RAKNET_TICK_LENGTH = 1 / RAKNET_TPS
 
 export class Server extends EventEmitter {
   server = true
+  client = false
   running = true
   socket: Dgram.Socket
 
@@ -37,8 +39,8 @@ export class Server extends EventEmitter {
     this.serverId = crypto.randomBytes(8).readBigInt64BE(0)
     this.hostname = hostname
     this.port = port
-    this.inLog = (...args) => console.debug('S -> ', ...args)
-    this.outLog = (...args) => console.debug('S <- ', ...args)
+    this.inLog = (...args) => debug('S -> ', ...args)
+    this.outLog = (...args) => debug('S <- ', ...args)
   }
 
   async listen() {
@@ -69,11 +71,11 @@ export class Server extends EventEmitter {
     const header = buffer.readUInt8()  // Read packet header to recognize packet type
 
     if (this.connections.has(sender.hash)) {
-      console.log('<- online',header)
+      // console.log('<- online',header)
       const connection = this.connections.get(sender.hash)
-      connection.receiveOnline(buffer)
+      connection.recieve(buffer)
     } else { // Offline
-      console.log('<- offline',header)
+      // console.log('<- offline',header)
       switch (header) {
         case Identifiers.UnconnectedPing:
           this.sendBuffer(this.handleUnconnectedPing(buffer), sender)

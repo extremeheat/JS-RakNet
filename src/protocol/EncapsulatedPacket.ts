@@ -105,6 +105,6 @@ export default class EncapsulatedPacket {
   }
 
   isReliable() {
-    return !!this.messageIndex
+    return Reliability.isReliable(this.reliability)
   }
 }

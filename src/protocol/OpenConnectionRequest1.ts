@@ -11,7 +11,7 @@ export default class OpenConnectionRequest1 extends OfflinePacket {
 
   public decode(): void {
     super.decode()
-    this.mtuSize = Buffer.byteLength(this.getBuffer()) + 1 + 28;
+    this.mtuSize = Buffer.byteLength(this.getBuffer()) + 28;
     this.readMagic();
     this.protocol = this.readByte();
   }
@@ -20,8 +20,9 @@ export default class OpenConnectionRequest1 extends OfflinePacket {
     super.encode()
     this.writeMagic();
     this.writeByte(this.protocol);
-    const length = this.mtuSize - this.getBuffer().byteLength;
-    const buf = Buffer.alloc(length).fill(0x00);
+    const length = this.mtuSize - this.getBuffer().byteLength - 1
+    const buf = Buffer.alloc(length).fill(0x00)
     this.append(buf);
+    console.warn('----- MTU', this.getBuffer().byteLength,this.getBuffer().byteOffset)
   }
 }

@@ -10,6 +10,7 @@ import OpenConnectionReply1 from './protocol/OpenConnectionReply1'
 import OpenConnectionRequest2 from './protocol/OpenConnectionRequest2'
 import OpenConnectionReply2 from './protocol/OpenConnectionReply2'
 import Identifiers from './protocol/Identifiers'
+const debug = require('debug')('raknet')
 
 // RakNet protocol versions 
 const RAKNET_PROTOCOL = 10
@@ -27,7 +28,8 @@ const enum State {
 
 export class Client extends EventEmitter {
   client = true
-  
+  server = false
+
   id: bigint
   socket: Dgram.Socket
   connection: Connection
@@ -41,6 +43,9 @@ export class Client extends EventEmitter {
   running = true
   lastPong = BigInt(Date.now())
   inLog; outLog;
+
+  int // Ping interval
+
   constructor(hostname: string, port: number) {
     super()
     console.assert(hostname.length, 'Hostname cannot be empty')
@@ -49,10 +54,10 @@ export class Client extends EventEmitter {
     this.port = port
     this.address = new InetAddress(this.hostname, this.port)
 
-    this.id = -7472034367240126457n
+    this.id = Buffer.from(crypto.randomBytes(8)).readBigInt64BE()
 
-    this.inLog = (...args) => console.debug('C -> ', ...args)
-    this.outLog = (...args) => console.debug('C <- ', ...args)
+    this.inLog = (...args) => debug('C -> ', ...args)
+    this.outLog = (...args) => debug('C <- ', ...args)
   }
 
   async connect() {
@@ -91,7 +96,7 @@ export class Client extends EventEmitter {
     let token = `${rinfo.address}:${rinfo.port}`
     // debug('[raknet] Hadling packet', buffer, this.connection)
     if (this.connection && buffer[0] > 0x20) {
-      this.connection.receiveOnline(buffer)
+      this.connection.recieve(buffer)
     } else {
       // debug('Header', header.toString(16))
       switch (header) {
@@ -148,7 +153,7 @@ export class Client extends EventEmitter {
 
   async handleOpenConnectionReply1(buffer) {
     this.inLog('[raknet] Got OpenConnectionReply1')
-    // this.state = 'connecting'
+    this.state = State.Connecting
     const decodedPacket = new OpenConnectionReply1()
     decodedPacket.buffer = buffer
     decodedPacket.decode()
@@ -173,15 +178,16 @@ export class Client extends EventEmitter {
     this.connection.inLog = this.inLog
     this.connection.outLog = this.outLog
     this.connection.sendConnectionRequest(this.id, decodedPacket.mtuSize)
+    this.state = State.Connected
   }
 
   startTicking() {
     let ticks = 0
-    let int = setInterval(() => {
+    this.int = setInterval(() => {
       ticks++
       if (this.running) {
         this.connection?.update(Date.now())
-        if (ticks % 100 == 0) { // TODO: How long do we wait before sending? about 1s for now
+        if (ticks % 100 == 0 && !globalThis.debuggingRaknet) { // TODO: How long do we wait before sending? about 1s for now
           this.outLog('Sending ping')
           this.connection ? this.connection.sendConnectedPing() : this.sendUnconnectedPing()
 
@@ -193,7 +199,7 @@ export class Client extends EventEmitter {
           }
         }
       } else {
-        clearInterval(int)
+        clearInterval(this.int)
       }
     }, RAKNET_TICK_LENGTH * 1000)
   }
@@ -202,6 +208,7 @@ export class Client extends EventEmitter {
     this.connection?.close()
     this.connection = null
     this.running = false
+    clearInterval(this.int)
     this.outLog('[client] closing', reason)
     this.emit('closeConnection', reason)
   }
@@ -218,8 +225,9 @@ export class Client extends EventEmitter {
      * @param {number} port 
      */
   sendBuffer(buffer, to = this.address) {
+    // console.log('C Outing [C->S]', buffer)
     this.socket.send(buffer, 0, buffer.length, to.port, to.address)
-    this.outLog('[C->S]', buffer)
+    // console.log('C Out [C->S]', buffer)
   }
 }
 

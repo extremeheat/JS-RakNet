@@ -2,9 +2,11 @@
   "name": "jsp-raknet",
   "version": "1.5.0",
   "description": "Basic RakNet implementation written in Javascript",
-  "main": "listener.js",
+  "main": "js/index.js",
   "scripts": {
-    "test": "node index.js"
+    "test": "node index.js",
+    "build": "tsc",
+    "install": "npm run build"
   },
   "repository": {
     "type": "git",

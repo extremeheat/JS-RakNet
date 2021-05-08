@@ -7,7 +7,10 @@ class SlidingReceiveWindow {
   }
 
   set(entryIndex, data) {
-    if (entryIndex < this.windowStart || entryIndex > this.windowEnd) return
+    if (entryIndex < this.windowStart || entryIndex > this.windowEnd) {  
+      // console.warn('OLD', entryIndex, this.windowStart); 
+      return
+    }
     this.newest = Math.max(this.newest, entryIndex)
     const offset = entryIndex - this.windowStart
     this.window[offset] = data
@@ -20,7 +23,7 @@ class SlidingReceiveWindow {
   }
 
   read() {
-    // console.log('Window', this.window)
+    // console.log('Window', this)
     const missing = []
     const have = []
     for (let i = this.windowStart; i < (this.newest + 1); i++) {
@@ -34,7 +37,7 @@ class SlidingReceiveWindow {
         // console.log(pak)
       }
     }
-    // console.log(missing, have)
+    // console.log('mISSING', 'HAVE', missing, have)
     for (let i = this.windowStart; i < this.windowEnd; i++) {
       const val = this.get(i)
       if (!val) {
@@ -57,10 +60,12 @@ class SlidingOrderedWindow {
     this.window = new Array(maxSize)
     this.windowStart = 0
     this.windowEnd = maxSize
+    this.newest = 0
   }
 
   set(entryIndex, data) {
     if (entryIndex < this.windowStart || entryIndex > this.windowEnd) return
+    this.newest = Math.max(this.newest, entryIndex)
     const offset = entryIndex - this.windowStart
     this.window[offset] = data
   }
@@ -72,6 +77,7 @@ class SlidingOrderedWindow {
   }
 
   read(onLost) {
+    // console.log('** Window', this)
     const out = []
     for (let i = this.windowStart; i < this.windowEnd; i++) {
       const val = this.get(i)
