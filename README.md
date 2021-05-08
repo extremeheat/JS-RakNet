@@ -2,6 +2,8 @@
 
 # JSRakNet
 
+Pure JavaScript implementaion of RakNet.
+
 Originally created by HerryYT and filfat. This is not stable, please consider using https://github.com/extremeheat/node-raknet-native instead if possible.
 
 ## Install
