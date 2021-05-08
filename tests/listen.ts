@@ -189,4 +189,4 @@ test().then(() => {
 setTimeout(() => { // if not resolved within 4s, probably failed
   console.log('Got', got)
   throw Error('test timed out')
-}, 9000)
+}, 9900)
