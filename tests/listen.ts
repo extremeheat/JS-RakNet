@@ -72,7 +72,7 @@ let got = 0
 async function testOrdered(server: Server, client: Client) {
   return new Promise((res) => {
     const pushed = []
-    const count = 20
+    const count = 10
     for (var i = 0; i < count; i++) {
       const packet = new EncapsulatedPacket()
       packet.reliability = Reliability.ReliableOrdered
@@ -176,8 +176,10 @@ async function test(hostname = '0.0.0.0', port = 19130) {
   const [server, client] = await createBasicClientServer(hostname, port)
   console.log('============')
   await sendTest(server,client)
+  await sleep(100)
   console.log('============')
   await testOrdered(server, client)
+  await sleep(100)
   console.log('============')
   await testOutOfOrder(server, client)
 }
