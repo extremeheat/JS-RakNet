@@ -181,7 +181,7 @@ async function test(hostname = '0.0.0.0', port = 19130) {
   await testOrdered(server, client)
   await sleep(100)
   console.log('============')
-  await testOutOfOrder(server, client)
+  // await testOutOfOrder(server, client)
 }
 
 test().then(() => {
