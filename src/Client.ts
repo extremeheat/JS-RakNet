@@ -211,6 +211,7 @@ export class Client extends EventEmitter {
     clearInterval(this.int)
     this.outLog('[client] closing', reason)
     this.emit('closeConnection', reason)
+    this.removeAllListeners()
   }
 
   removeConnection(args) {

@@ -194,8 +194,12 @@ export class Server extends EventEmitter {
 
   close() {
     this.running = false
+    for (const [k, v] of this.connections) {
+      v.close()
+    }
     this.socket.close(() => {
       this.emit('closed')
+      this.removeAllListeners()
     })
   }
 }
