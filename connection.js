@@ -13,6 +13,8 @@ const ConnectedPing = require('./protocol/connected_ping')
 const ConnectedPong = require('./protocol/connected_pong')
 const BinaryStream = require('@jsprismarine/jsbinaryutils').default
 
+const SlidingWindow = require('./utils/raknetWindow')
+
 'use strict'
 
 const Priority = {
@@ -55,6 +57,9 @@ class Connection {
     #reliableWindowStart = 0
     #reliableWindowEnd = 2048
     #reliableWindow = new Map()
+
+    reliableWindow2 = new SlidingWindow(64)
+
     #lastReliableIndex = -1
 
     // Array containing received sequence numbers
@@ -106,6 +111,7 @@ class Connection {
             let pk = new NACK()
             pk.packets = this.#nackQueue
             pk.write()
+            debug('Sending NACK batch', this.#nackQueue)
             this.sendPacket(pk)
             this.#nackQueue = []
         }
@@ -186,13 +192,16 @@ class Connection {
 
         // Check if we already received packet and so we don't handle them
         // i still need to understand what are those window stuff
-        if (
-            dataPacket.sequenceNumber < this.#windowStart || 
-            dataPacket.sequenceNumber > this.#windowEnd || 
-            this.#receivedWindow.includes(dataPacket.sequenceNumber)
-        ) {
-            return
-        }
+        // if (
+        //     (dataPacket.sequenceNumber < this.#windowStart || 
+        //     dataPacket.sequenceNumber > this.#windowEnd || 
+        //     this.#receivedWindow.includes(dataPacket.sequenceNumber)) &&
+        //     !this.#nackQueue.includes(dataPacket.sequenceNumber)
+        //     && !
+        // ) {
+        //     debug('~ Drop SEQ #', dataPacket.sequenceNumber, this.#nackQueue)
+        //     return
+        // }
 
         // Check if there are missing packets between the received packet and the last received one
         let diff = dataPacket.sequenceNumber - this.#lastSequenceNumber
@@ -235,7 +244,7 @@ class Connection {
             this.#windowEnd += diff
         }
 
-        // debug('--- SEQ #', dataPacket.sequenceNumber)
+        console.info('--- SEQ #', dataPacket.sequenceNumber)
 
         // Handle encapsulated
         // This is an array but soon 
@@ -285,55 +294,24 @@ class Connection {
      * @param {EncapsulatedPacket} packet 
      */
     receivePacket(packet) {
-        // console.debug('[con] ->',packet)
+        console.trace('[con] ->',packet)
+
         if (typeof packet.messageIndex === 'undefined') {
             // Handle the packet directly if it doesn't have a message index    
             this.handlePacket(packet)        
         } else {
-            // Seems like we are checking the same stuff like before
-            // but just with reliable packets
-            if (
-                packet.messageIndex < this.#reliableWindowStart ||
-                packet.messageIndex > this.#reliableWindowEnd
-            ) {
-                return
+
+            this.reliableWindow2.set(packet.messageIndex, packet)
+
+            const readable = this.reliableWindow2.read((lost) => console.log('!! LOST',lost))
+            debug('Reading reliable', readable)
+            for (const pak of readable) {
+                this.handlePacket(pak)
             }
 
-            if ((packet.messageIndex - this.#lastReliableIndex) === 1) {
-                this.#lastReliableIndex++
-                this.#reliableWindowStart++
-                this.#reliableWindowEnd++
-                // debug('HANDLING #', packet.messageIndex, packet.buffer.toString('hex'))
-                this.handlePacket(packet)
-
-                if (this.#reliableWindow.size > 0) {
-                    let windows = [...this.#reliableWindow.entries()]
-                    let reliableWindow = new Map()
-                    windows.sort((a, b) => a[0] - b[0])
-
-                    for (const [k, v] of windows) {
-                        reliableWindow.set(k, v)
-                    }
-
-                    this.#reliableWindow = reliableWindow
-
-                    for (let [seqIndex, pk] of this.#reliableWindow) {
-                        if ((seqIndex - this.#lastReliableIndex) !== 1) {
-                            break
-                        }
-                        this.#lastReliableIndex++
-                        this.#reliableWindowStart++
-                        this.#reliableWindowEnd++
-                        this.handlePacket(pk)
-
-                        this.#reliableWindow.delete(seqIndex)
-                    }
-                }
-            } else {
-                this.#reliableWindow.set(packet.messageIndex, packet)
-            }
         }
     }
+
 
     /**
      * @param {EncapsulatedPacket} packet 
@@ -421,6 +399,7 @@ class Connection {
      */
     handlePacket(packet) {
         if (packet.split) {
+            debug('reading split')
             this.handleSplit(packet)
             return
         }
@@ -589,9 +568,8 @@ class Connection {
                 stream.append(packet.buffer)
             }
             this.#splitPackets.delete(packet.splitID)
-        
             pk.buffer = stream.buffer
-            this.receivePacket(pk)
+            this.handlePacket(pk)
         }
     }
 
