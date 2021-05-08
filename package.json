@@ -1,12 +1,12 @@
 {
   "name": "jsp-raknet",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Basic RakNet implementation written in Javascript",
   "main": "js/index.js",
   "scripts": {
     "test": "ts-node tests/listen.ts",
     "build": "tsc",
-    "install": "npm run build"
+    "prepare": "npm run build"
   },
   "repository": {
     "type": "git",
