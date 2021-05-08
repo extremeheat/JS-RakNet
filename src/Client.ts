@@ -54,30 +54,19 @@ export class Client extends EventEmitter {
     this.port = port
     this.address = new InetAddress(this.hostname, this.port)
 
+    this.socket = Dgram.createSocket({ type: 'udp4' })
     this.id = Buffer.from(crypto.randomBytes(8)).readBigInt64BE()
 
     this.inLog = (...args) => debug('C -> ', ...args)
     this.outLog = (...args) => debug('C <- ', ...args)
-  }
-
-  async connect() {
-    this.socket = Dgram.createSocket({ type: 'udp4' })
 
     this.socket.on('message', (buffer, rinfo) => {
       this.inLog('[S->C]', buffer, rinfo)
       this.handle(buffer, rinfo)
     })
+  }
 
-    await new Promise((resolve, reject) => {
-      const failFn = e => reject(e)
-
-      this.socket.once('error', failFn)
-      this.socket.bind(null, null, () => {
-        this.socket.removeListener('error', failFn)
-        resolve(true)
-      })
-    })
-
+  async connect() {
     const MAX_CONNECTION_TRIES = 5
     for (let i = 0; i < MAX_CONNECTION_TRIES; i++) {
       this.outLog('Connecting with mtu', this.mtuSize)
@@ -140,7 +129,7 @@ export class Client extends EventEmitter {
     decodedPacket.buffer = buffer
     decodedPacket.decode()
     this.lastPong = BigInt(decodedPacket.sendTimestamp)
-    this.emit('unconnectedPong', this.lastPong)
+    this.emit('unconnectedPong', decodedPacket.serverName, decodedPacket.serverGUID, this.lastPong)
   }
 
   sendUnconnectedPing() {
@@ -149,6 +138,13 @@ export class Client extends EventEmitter {
     packet.clientGUID = this.id
     packet.encode()
     this.sendBuffer(packet.buffer)
+  }
+
+  ping(cb) {
+    this.sendUnconnectedPing()
+    this.once('unconnectedPong', (serverName, guid) => {
+      cb(serverName, guid)
+    })
   }
 
   async handleOpenConnectionReply1(buffer) {
@@ -206,6 +202,7 @@ export class Client extends EventEmitter {
 
   close(reason) {
     this.connection?.close()
+    this.socket?.close()
     this.connection = null
     this.running = false
     clearInterval(this.int)
@@ -226,7 +223,7 @@ export class Client extends EventEmitter {
      * @param {number} port 
      */
   sendBuffer(buffer, to = this.address) {
-    // console.log('C Outing [C->S]', buffer)
+    console.log('C Outing [C->S]', buffer)
     this.socket.send(buffer, 0, buffer.length, to.port, to.address)
     // console.log('C Out [C->S]', buffer)
   }

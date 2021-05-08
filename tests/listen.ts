@@ -14,12 +14,6 @@ async function createBasicClientServer(hostname, port) {
     listener.listen().then(() => {
       console.log(`Listening on ${hostname}:${port}`)
     })
-    listener.on('test', () => {
-      console.log('Got a new connection')
-    })
-    listener.on('unconnectedPong', (query) => {
-      query.setMotd('Rewritten MOTD')
-    })
 
     let serverOpened = false
     listener.on('openConnection', () => {
@@ -27,8 +21,12 @@ async function createBasicClientServer(hostname, port) {
     })
 
     client = new Client(hostname, port)
-    client.connect().then(() => {
-      console.log(`[client] created socket`)
+
+    client.ping(serverName => {
+      console.log('PONG MOTD', serverName)
+      client.connect().then(() => {
+        console.log(`[client] created socket`)
+      })
     })
     client.on('connecting', () => {
       console.log(`[client] connecting to ${hostname}/${port}`)

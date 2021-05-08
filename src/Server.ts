@@ -201,5 +201,6 @@ export class Server extends EventEmitter {
       this.emit('closed')
       this.removeAllListeners()
     })
+    this.socket?.close()
   }
 }
