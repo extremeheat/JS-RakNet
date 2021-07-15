@@ -457,7 +457,6 @@ export class Connection {
     if (this.nextDatagram.packets.length > 0) {
       this.nextDatagram.sequenceNumber = this.sendSequenceNumber++
       this.nextDatagram.encode()
-      // console.log('SENDING Q!')
       this.sendPacket(this.nextDatagram)
       // this.sendQueue.sendTime = Date.now()
       this.recoveryList.set(this.nextDatagram.sequenceNumber, this.nextDatagram)

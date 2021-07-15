@@ -202,7 +202,7 @@ export class Client extends EventEmitter {
 
   close(reason) {
     this.connection?.close()
-    this.socket?.close()
+    try { this.socket.close() } catch {}
     this.connection = null
     this.running = false
     clearInterval(this.int)
@@ -223,9 +223,7 @@ export class Client extends EventEmitter {
      * @param {number} port 
      */
   sendBuffer(buffer, to = this.address) {
-    console.log('C Outing [C->S]', buffer)
     this.socket.send(buffer, 0, buffer.length, to.port, to.address)
-    // console.log('C Out [C->S]', buffer)
   }
 }
 

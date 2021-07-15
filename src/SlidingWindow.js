@@ -23,7 +23,6 @@ class SlidingReceiveWindow {
   }
 
   read() {
-    // console.log('Window', this)
     const missing = []
     const have = []
     for (let i = this.windowStart; i < (this.newest + 1); i++) {
@@ -33,11 +32,8 @@ class SlidingReceiveWindow {
       } else if (pak !== true) { // Make sure we didn't read yet
         have.push(pak)
         this.set(i, true) // Mark that we read this
-      } else {
-        // console.log(pak)
       }
     }
-    // console.log('mISSING', 'HAVE', missing, have)
     for (let i = this.windowStart; i < this.windowEnd; i++) {
       const val = this.get(i)
       if (!val) {
@@ -77,7 +73,6 @@ class SlidingOrderedWindow {
   }
 
   read(onLost) {
-    // console.log('** Window', this)
     const out = []
     for (let i = this.windowStart; i < this.windowEnd; i++) {
       const val = this.get(i)

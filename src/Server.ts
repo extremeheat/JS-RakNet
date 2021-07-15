@@ -71,11 +71,9 @@ export class Server extends EventEmitter {
     const header = buffer.readUInt8()  // Read packet header to recognize packet type
 
     if (this.connections.has(sender.hash)) {
-      // console.log('<- online',header)
       const connection = this.connections.get(sender.hash)
       connection.recieve(buffer)
     } else { // Offline
-      // console.log('<- offline',header)
       switch (header) {
         case Identifiers.UnconnectedPing:
           this.sendBuffer(this.handleUnconnectedPing(buffer), sender)
@@ -201,6 +199,5 @@ export class Server extends EventEmitter {
       this.emit('closed')
       this.removeAllListeners()
     })
-    this.socket?.close()
   }
 }
