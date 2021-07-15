@@ -8,7 +8,6 @@ export default class AcknowledgePacket extends Packet {
   packets: number[] = [];
 
   public decode(): void {
-    // console.warn('Decoding ACK', this.buffer)
     super.decode()
     // Clear old cached decoded packets
     this.packets = [];

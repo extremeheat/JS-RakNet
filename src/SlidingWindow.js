@@ -8,7 +8,6 @@ class SlidingReceiveWindow {
 
   set(entryIndex, data) {
     if (entryIndex < this.windowStart || entryIndex > this.windowEnd) {  
-      // console.warn('OLD', entryIndex, this.windowStart); 
       return
     }
     this.newest = Math.max(this.newest, entryIndex)

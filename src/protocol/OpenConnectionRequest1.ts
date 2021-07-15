@@ -23,6 +23,5 @@ export default class OpenConnectionRequest1 extends OfflinePacket {
     const length = this.mtuSize - this.getBuffer().byteLength - 1
     const buf = Buffer.alloc(length).fill(0x00)
     this.append(buf);
-    console.warn('----- MTU', this.getBuffer().byteLength,this.getBuffer().byteOffset)
   }
 }
