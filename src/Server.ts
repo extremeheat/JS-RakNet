@@ -50,7 +50,11 @@ export class Server extends EventEmitter {
     this.socket.on('message', (buffer, rinfo) => {
       this.inLog('[C->S]', buffer, rinfo)
       const sender = new InetAddress(rinfo.address, rinfo.port)
-      this.handle(buffer, sender)
+      try{
+        this.handle(buffer, sender)
+      }catch (e) {
+        this.emit('incomingPacketError', e, buffer)
+      }
     })
 
     await new Promise((resolve, reject) => {
