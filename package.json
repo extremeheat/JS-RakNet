@@ -1,6 +1,6 @@
 {
   "name": "jsp-raknet",
-  "version": "2.1.3",
+  "version": "2.2.0",
   "description": "Basic RakNet implementation written in Javascript",
   "main": "js/index.js",
   "scripts": {
