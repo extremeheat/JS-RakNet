@@ -22,6 +22,8 @@ enum Priority {
   Immediate
 }
 
+const CONNECTION_TIMEOUT = 10000
+
 const enum Status {
   Connecting, Connected, Disconnecting, Disconnected
 }
@@ -76,7 +78,7 @@ export class Connection {
    * @param timestamp current tick time
    */
   update(timestamp: number) {
-    if (this.running && (this.lastUpdate + 10000) < timestamp && !globalThis.debuggingRaknet) {
+    if (this.running && (this.lastUpdate + CONNECTION_TIMEOUT) < timestamp) {
       this.disconnect('timeout')
       return
     }
@@ -125,11 +127,13 @@ export class Connection {
   }
 
   disconnect(reason = 'unknown') {
-
+    this.state = Status.Disconnecting
+    this.listener.close(reason)
   }
 
   recieve(buffer: Buffer) {
     this.recvQueue.push(buffer)
+    this.lastUpdate = Date.now()
   }
 
   /**
@@ -178,6 +182,7 @@ export class Connection {
         this.outLog('[raknet] sent', pk)
         this.recoveryList.delete(seq)
       } else {
+        // This is bad. The connection will probably now die if encryption is enabled.
         this.inLog('** LOST PACKET', seq)
       }
     }
@@ -216,7 +221,7 @@ export class Connection {
     if (packet.isReliable()) {
       this.reliableReceiveWindow.set(packet.messageIndex, packet)
 
-      const readable = this.reliableReceiveWindow.read((lost) => debug('Lost ordered', lost))
+      const readable = this.reliableReceiveWindow.read((lost) => debug('Lost ordered', lost, 'currently at', packet.messageIndex))
       this.inLog('Reading reliable', readable)
       for (const pak of readable) {
         this.handlePacket(pak)
@@ -442,7 +447,7 @@ export class Connection {
       this.sendPacket(packet)
       // packet.sendTime = Date.now()  
       this.recoveryList.set(packet.sequenceNumber, packet)
-      this.outLog('Sent Q #', packet.sequenceNumber)
+      // this.outLog('Immedate Sent Q #', packet.sequenceNumber)
       return
     }
     const length = this.nextDatagram.length()
@@ -459,6 +464,7 @@ export class Connection {
       this.nextDatagram.encode()
       this.sendPacket(this.nextDatagram)
       // this.sendQueue.sendTime = Date.now()
+      // console.log('Normal Sent Q #', this.nextDatagram.sequenceNumber)
       this.recoveryList.set(this.nextDatagram.sequenceNumber, this.nextDatagram)
       this.nextDatagram = new DataPacket()
     }
@@ -469,7 +475,7 @@ export class Connection {
   }
 
   close() {
-    // console.trace('[conn] Closing!')
+    this.state = Status.Disconnected
     const stream = new BinaryStream(Buffer.from('\x00\x00\x08\x15', 'binary'))
     this.addEncapsulatedToQueue(EncapsulatedPacket.fromBinary(stream), Priority.Immediate)  // Client discconect packet 0x15
   }

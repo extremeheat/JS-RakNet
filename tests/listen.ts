@@ -172,7 +172,7 @@ async function testOutOfOrder(server: Server, client: Client) {
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 // Script intended to test, it istantiate a new RakNet listener 
-async function test(hostname = '0.0.0.0', port = 19130) {
+async function test(hostname = '0.0.0.0', port = 19160) {
   const [server, client] = await createBasicClientServer(hostname, port)
   console.log('============')
   await sendTest(server,client)

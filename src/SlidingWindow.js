@@ -76,7 +76,7 @@ class SlidingOrderedWindow {
     for (let i = this.windowStart; i < this.windowEnd; i++) {
       const val = this.get(i)
       if (!val) {
-        onLost?.(i)
+        if (i <= this.newest) onLost?.(i)
         break
       }
       this.windowStart++

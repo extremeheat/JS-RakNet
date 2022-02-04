@@ -15,10 +15,13 @@ export default class ConnectionRequestAccepted extends Packet {
   decode() {
     super.decode()
     this.clientAddress = this.readAddress()
-    this.readShort()  // unknown
+    const addressIndex = this.readShort()  // unknown
+
     for (let i = 0; i < 20; i++) {
-      this.readAddress()
+      const address = this.readAddress()
+      if (this.reaminingBytes === 16) break
     }
+
     this.requestTimestamp = this.readLong()
     this.acceptedTimestamp = this.readLong()
   }

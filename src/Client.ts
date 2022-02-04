@@ -33,7 +33,7 @@ export class Client extends EventEmitter {
   id: bigint
   socket: Dgram.Socket
   connection: Connection
-  mtuSize = 1492
+  mtuSize = 1400
   state = State.Waiting
 
   hostname: string
@@ -54,11 +54,11 @@ export class Client extends EventEmitter {
     this.port = port
     this.address = new InetAddress(this.hostname, this.port)
 
-    this.socket = Dgram.createSocket({ type: 'udp4' })
+    this.socket = Dgram.createSocket({ type: 'udp4', recvBufferSize: 1024 * 256 * 2, sendBufferSize: 1024 * 16 })
     this.id = Buffer.from(crypto.randomBytes(8)).readBigInt64BE()
 
-    this.inLog = (...args) => debug('C -> ', ...args)
-    this.outLog = (...args) => debug('C <- ', ...args)
+    this.inLog = (...args) => debug('C -> ', hostname, ...args)
+    this.outLog = (...args) => debug('C <- ', hostname, ...args)
 
     this.socket.on('message', (buffer, rinfo) => {
       this.inLog('[S->C]', buffer, rinfo)
@@ -155,7 +155,7 @@ export class Client extends EventEmitter {
     decodedPacket.decode()
 
     const packet = new OpenConnectionRequest2()
-    packet.mtuSize = decodedPacket.mtuSize
+    packet.mtuSize = Math.min(decodedPacket.mtuSize, 1400)
     packet.clientGUID = this.id
     packet.serverAddress = this.address
     // debug('MTU', decodedPacket, packet.mtuSize, packet.clientGUID, packet.serverAddress.address)
@@ -170,10 +170,11 @@ export class Client extends EventEmitter {
     decodedPacket.buffer = buffer
     decodedPacket.decode()
 
-    this.connection = new Connection(this, decodedPacket.mtuSize, this.address)
+    this.mtuSize = Math.min(decodedPacket.mtuSize, 1400)
+    this.connection = new Connection(this, this.mtuSize, this.address)
     this.connection.inLog = this.inLog
     this.connection.outLog = this.outLog
-    this.connection.sendConnectionRequest(this.id, decodedPacket.mtuSize)
+    this.connection.sendConnectionRequest(this.id, this.mtuSize)
     this.state = State.Connected
   }
 
@@ -201,13 +202,14 @@ export class Client extends EventEmitter {
   }
 
   close(reason) {
+    if (!this.running) return
     this.connection?.close()
-    try { this.socket.close() } catch {}
+    setTimeout(() => this.socket.close(), 100)
     this.connection = null
     this.running = false
     clearInterval(this.int)
     this.outLog('[client] closing', reason)
-    this.emit('closeConnection', reason)
+    this.emit('disconnect', reason)
     this.removeAllListeners()
   }
 

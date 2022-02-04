@@ -39,12 +39,12 @@ export class Server extends EventEmitter {
     this.serverId = crypto.randomBytes(8).readBigInt64BE(0)
     this.hostname = hostname
     this.port = port
-    this.inLog = (...args) => debug('S -> ', ...args)
-    this.outLog = (...args) => debug('S <- ', ...args)
+    this.inLog = (...args) => debug('S -> ', hostname, ...args)
+    this.outLog = (...args) => debug('S <- ', hostname, ...args)
   }
 
   async listen() {
-    this.socket = Dgram.createSocket({ type: 'udp4' })
+    this.socket = Dgram.createSocket({ type: 'udp4', recvBufferSize: 1024 * 256 * 2, sendBufferSize: 1024 * 16 })
     this.serverName.serverId = this.serverId.toString()
 
     this.socket.on('message', (buffer, rinfo) => {
@@ -91,6 +91,10 @@ export class Server extends EventEmitter {
   sendBuffer(sendBuffer: Buffer, client: InetAddress) {
     this.outLog('<- ', sendBuffer, client)
     this.socket.send(sendBuffer, 0, sendBuffer.length, client.port, client.address)
+  }
+
+  setPongAdvertisement(ad) {
+    this.serverName = ad
   }
 
   handleUnconnectedPing(buffer) {
@@ -143,7 +147,7 @@ export class Server extends EventEmitter {
     // Encode response
     const packet = new OpenConnectionReply1()
     packet.serverGUID = this.serverId
-    packet.mtuSize = decodedPacket.mtuSize
+    packet.mtuSize = Math.min(decodedPacket.mtuSize, 1400)
     packet.encode()
 
     return packet.buffer
@@ -164,7 +168,7 @@ export class Server extends EventEmitter {
     // Encode response
     const packet = new OpenConnectionReply2()
     packet.serverGUID = this.serverId
-    packet.mtuSize = decodedPacket.mtuSize
+    packet.mtuSize = Math.min(decodedPacket.mtuSize, 1400)
     packet.clientAddress = address
     packet.encode()
 
@@ -191,13 +195,17 @@ export class Server extends EventEmitter {
   }
 
   close() {
+    if (!this.running) return
     this.running = false
-    for (const [k, v] of this.connections) {
-      v.close()
-    }
-    this.socket.close(() => {
-      this.emit('closed')
-      this.removeAllListeners()
-    })
+    // Wait some time for final packets to go through
+    setTimeout(() => {
+      for (const [k, v] of this.connections) {
+        v.close()
+      }
+      this.socket.close(() => {
+        this.emit('close')
+        this.removeAllListeners()
+      })
+    }, 100)
   }
 }
